@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Speed Shifter & Pitch Visualizer</title>
+
+    <title>Audio Speed Shifter</title>
 
     <style>
         * {
@@ -14,9 +15,12 @@
             margin: 0;
             padding: 30px 16px;
             min-height: 100vh;
+
             font-family: Arial, sans-serif;
+
             background: #121212;
             color: #f5f5f5;
+
             display: flex;
             justify-content: center;
             align-items: flex-start;
@@ -25,15 +29,19 @@
         .container {
             width: 100%;
             max-width: 650px;
+
             padding: 30px;
+
             background: #1e1e1e;
             border: 1px solid #333;
             border-radius: 16px;
+
             box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
         }
 
         h1 {
             margin: 0 0 25px;
+
             text-align: center;
             font-size: 26px;
         }
@@ -41,6 +49,7 @@
         .section {
             margin-bottom: 25px;
             padding: 20px;
+
             background: #282828;
             border-radius: 12px;
         }
@@ -53,16 +62,20 @@
         input[type="file"] {
             width: 100%;
             padding: 12px;
+
             background: #333;
             border: 1px solid #444;
             border-radius: 8px;
+
             color: #fff;
         }
 
         .file-name {
             margin-top: 10px;
+
             color: #aaa;
             font-size: 14px;
+
             overflow-wrap: anywhere;
         }
 
@@ -70,7 +83,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 12px;
+
             margin-bottom: 15px;
         }
 
@@ -89,7 +102,9 @@
         .range-labels {
             display: flex;
             justify-content: space-between;
+
             margin-top: 8px;
+
             color: #aaa;
             font-size: 12px;
         }
@@ -100,62 +115,83 @@
         }
 
         .pitch-value {
+            margin-bottom: 12px;
+
             font-size: 22px;
             font-weight: bold;
-            margin-bottom: 12px;
         }
 
         .pitch-bar-container {
             position: relative;
+
             width: 100%;
             height: 14px;
+
             background: #444;
             border-radius: 10px;
+
             overflow: hidden;
         }
 
         .pitch-center {
             position: absolute;
+
             top: 0;
             left: 50%;
+
             width: 2px;
             height: 100%;
+
             background: #fff;
+
             z-index: 2;
         }
 
         .pitch-bar {
             position: absolute;
+
             top: 0;
+
             height: 100%;
             width: 0;
+
             background: #4cafef;
-            transition: width 0.1s ease, left 0.1s ease;
+
+            transition:
+                width 0.1s ease,
+                left 0.1s ease;
         }
 
         .pitch-description {
             margin-top: 10px;
+
             color: #aaa;
             font-size: 13px;
-            text-align: center;
         }
 
         .controls {
             display: flex;
             gap: 12px;
+
             margin-top: 20px;
         }
 
         button {
             flex: 1;
+
             padding: 13px 16px;
+
             border: none;
             border-radius: 8px;
+
             background: #4cafef;
             color: #111;
+
             font-size: 15px;
             font-weight: bold;
+
             cursor: pointer;
+
             transition: background 0.2s;
         }
 
@@ -166,6 +202,7 @@
         button:disabled {
             background: #555;
             color: #aaa;
+
             cursor: not-allowed;
         }
 
@@ -181,10 +218,11 @@
         .status {
             margin-top: 18px;
             min-height: 20px;
+
             color: #aaa;
             font-size: 14px;
+
             text-align: center;
-            overflow-wrap: anywhere;
         }
 
         .status.error {
@@ -193,10 +231,6 @@
 
         .status.success {
             color: #76d28b;
-        }
-
-        audio {
-            display: none;
         }
 
         @media (max-width: 500px) {
@@ -216,10 +250,14 @@
 </head>
 
 <body>
+
     <main class="container">
+
         <h1>Audio Speed Shifter</h1>
 
+        <!-- File selection -->
         <section class="section">
+
             <h2>Audio File</h2>
 
             <input
@@ -228,17 +266,34 @@
                 accept="audio/*"
             >
 
-            <div class="file-name" id="fileName">
+            <div
+                class="file-name"
+                id="fileName"
+            >
                 No file selected
             </div>
+
         </section>
 
+
+        <!-- Speed control -->
         <section class="section">
-            <h2>Speed & Pitch</h2>
+
+            <h2>Speed</h2>
 
             <div class="speed-header">
-                <label for="speedSlider">Playback Speed</label>
-                <span class="speed-value" id="speedValue">100%</span>
+
+                <label for="speedSlider">
+                    Playback Speed
+                </label>
+
+                <span
+                    class="speed-value"
+                    id="speedValue"
+                >
+                    100%
+                </span>
+
             </div>
 
             <input
@@ -257,27 +312,48 @@
                 <span>200%</span>
             </div>
 
+
+            <!-- Pitch information -->
             <div class="pitch-info">
-                <div class="pitch-value" id="pitchValue">
+
+                <div
+                    class="pitch-value"
+                    id="pitchValue"
+                >
                     0.00 semitones
                 </div>
 
                 <div class="pitch-bar-container">
+
                     <div class="pitch-center"></div>
-                    <div class="pitch-bar" id="pitchBar"></div>
+
+                    <div
+                        class="pitch-bar"
+                        id="pitchBar"
+                    ></div>
+
                 </div>
 
                 <div class="pitch-description">
-                    Pitch changes naturally with playback speed.
+                    Pitch is automatically compensated to stay unchanged.
                 </div>
+
             </div>
+
         </section>
 
+
+        <!-- Playback and export -->
         <section class="section">
+
             <h2>Playback & Export</h2>
 
             <div class="controls">
-                <button id="playButton" disabled>
+
+                <button
+                    id="playButton"
+                    disabled
+                >
                     Play
                 </button>
 
@@ -288,92 +364,182 @@
                 >
                     Stop
                 </button>
+
             </div>
+
 
             <div class="controls">
-                <button id="exportButton" disabled>
+
+                <button
+                    id="exportButton"
+                    disabled
+                >
                     Export as WAV
                 </button>
+
             </div>
 
-            <div class="status" id="status">
+
+            <div
+                class="status"
+                id="status"
+            >
                 Load an audio file to get started.
             </div>
+
         </section>
 
-        <audio id="audioPlayer"></audio>
     </main>
 
+
     <script>
-        const fileInput = document.getElementById("fileInput");
-        const fileName = document.getElementById("fileName");
-        const speedSlider = document.getElementById("speedSlider");
-        const speedValue = document.getElementById("speedValue");
-        const pitchValue = document.getElementById("pitchValue");
-        const pitchBar = document.getElementById("pitchBar");
 
-        const playButton = document.getElementById("playButton");
-        const stopButton = document.getElementById("stopButton");
-        const exportButton = document.getElementById("exportButton");
+        /*
+         * DOM elements
+         */
 
-        const status = document.getElementById("status");
-        const audioPlayer = document.getElementById("audioPlayer");
+        const fileInput =
+            document.getElementById("fileInput");
+
+        const fileName =
+            document.getElementById("fileName");
+
+        const speedSlider =
+            document.getElementById("speedSlider");
+
+        const speedValue =
+            document.getElementById("speedValue");
+
+        const pitchValue =
+            document.getElementById("pitchValue");
+
+        const pitchBar =
+            document.getElementById("pitchBar");
+
+        const playButton =
+            document.getElementById("playButton");
+
+        const stopButton =
+            document.getElementById("stopButton");
+
+        const exportButton =
+            document.getElementById("exportButton");
+
+        const status =
+            document.getElementById("status");
+
+
+        /*
+         * Audio state
+         */
 
         let rawArrayBuffer = null;
-        let audioObjectUrl = null;
+
+        let audioBuffer = null;
+
+        let audioContext = null;
+
+        let previewSource = null;
+
+        let previewStartTime = 0;
+
+        let previewOffset = 0;
+
+        let isPlaying = false;
+
         let isExporting = false;
 
-        // Convert playback speed to pitch shift in semitones.
+
+        /*
+         * Calculate the pitch change caused
+         * by changing playback speed.
+         *
+         * Example:
+         *
+         * 0.5x = -12 semitones
+         * 1.0x =   0 semitones
+         * 2.0x = +12 semitones
+         */
+
         function calculateSemitones(speed) {
             return 12 * Math.log2(speed);
         }
 
-        // Update the speed and pitch display.
+
+        /*
+         * Update the speed and pitch display.
+         */
+
         function updateSpeedDisplay() {
-            const speed = parseFloat(speedSlider.value);
-            const semitones = calculateSemitones(speed);
+
+            const speed =
+                parseFloat(speedSlider.value);
+
+            const semitones =
+                calculateSemitones(speed);
+
+
+            /*
+             * Speed display
+             */
 
             speedValue.textContent =
                 `${Math.round(speed * 100)}%`;
 
-            const sign = semitones > 0 ? "+" : "";
+
+            /*
+             * Pitch display
+             *
+             * This shows how much pitch would normally
+             * change when playbackRate is changed.
+             *
+             * We compensate for this during playback,
+             * so the actual audio pitch remains unchanged.
+             */
+
+            const sign =
+                semitones > 0 ? "+" : "";
 
             pitchValue.textContent =
                 `${sign}${semitones.toFixed(2)} semitones`;
 
-            // The bar represents the range from -12 to +12 semitones.
-            const normalized = (semitones + 12) / 24;
+
+            /*
+             * Pitch visualization
+             */
+
+            const normalized =
+                (semitones + 12) / 24;
+
             const center = 0.5;
 
+
             if (normalized >= center) {
+
                 pitchBar.style.left = "50%";
+
                 pitchBar.style.width =
                     `${(normalized - center) * 100}%`;
+
             } else {
-                pitchBar.style.left = `${normalized * 100}%`;
+
+                pitchBar.style.left =
+                    `${normalized * 100}%`;
+
                 pitchBar.style.width =
                     `${(center - normalized) * 100}%`;
             }
-
-            // Keep the preview in sync with the export.
-            audioPlayer.playbackRate = speed;
-
-            // Disable pitch preservation so speed also changes pitch.
-            if ("preservesPitch" in audioPlayer) {
-                audioPlayer.preservesPitch = false;
-            }
-
-            if ("webkitPreservesPitch" in audioPlayer) {
-                audioPlayer.webkitPreservesPitch = false;
-            }
-
-            if ("mozPreservesPitch" in audioPlayer) {
-                audioPlayer.mozPreservesPitch = false;
-            }
         }
 
+
+        /*
+         * Display a status message.
+         */
+
         function showStatus(message, type = "") {
+
             status.textContent = message;
+
             status.className = "status";
 
             if (type) {
@@ -381,247 +547,819 @@
             }
         }
 
-        // Load the selected audio file.
-        fileInput.addEventListener("change", (event) => {
-            const file = event.target.files[0];
 
-            if (!file) {
-                return;
-            }
+        /*
+         * Create the AudioContext.
+         */
 
-            if (audioObjectUrl) {
-                URL.revokeObjectURL(audioObjectUrl);
-            }
+        function createAudioContext() {
 
-            rawArrayBuffer = null;
-            audioPlayer.pause();
-            audioPlayer.currentTime = 0;
+            if (!audioContext) {
 
-            fileName.textContent = file.name;
-            showStatus("Loading audio...");
-
-            const reader = new FileReader();
-
-            reader.onload = () => {
-                rawArrayBuffer = reader.result;
-
-                audioObjectUrl = URL.createObjectURL(file);
-                audioPlayer.src = audioObjectUrl;
-                audioPlayer.load();
-
-                playButton.disabled = false;
-                stopButton.disabled = false;
-                exportButton.disabled = false;
-
-                updateSpeedDisplay();
-                showStatus("Audio loaded successfully.", "success");
-            };
-
-            reader.onerror = () => {
-                showStatus("Could not read the selected file.", "error");
-            };
-
-            reader.readAsArrayBuffer(file);
-        });
-
-        // Update speed and pitch when the slider changes.
-        speedSlider.addEventListener("input", () => {
-            updateSpeedDisplay();
-        });
-
-        // Start playback.
-        playButton.addEventListener("click", async () => {
-            if (!audioPlayer.src) {
-                return;
-            }
-
-            try {
-                updateSpeedDisplay();
-                await audioPlayer.play();
-                showStatus("Playing audio...");
-            } catch (error) {
-                showStatus(
-                    "Playback failed: " + error.message,
-                    "error"
-                );
-            }
-        });
-
-        // Stop playback and reset to the beginning.
-        stopButton.addEventListener("click", () => {
-            audioPlayer.pause();
-            audioPlayer.currentTime = 0;
-            showStatus("Playback stopped.");
-        });
-
-        // Export the audio with the selected speed and pitch.
-        exportButton.addEventListener("click", async () => {
-            if (!rawArrayBuffer || isExporting) {
-                return;
-            }
-
-            isExporting = true;
-            exportButton.disabled = true;
-            playButton.disabled = true;
-
-            showStatus("Rendering audio... Please wait.");
-
-            const currentSpeed = parseFloat(speedSlider.value);
-
-            try {
-                // Decode the original audio file.
-                const decodeContext = new (
+                audioContext = new (
                     window.AudioContext ||
                     window.webkitAudioContext
                 )();
+            }
 
-                const audioBuffer = await decodeContext.decodeAudioData(
-                    rawArrayBuffer.slice(0)
-                );
+            return audioContext;
+        }
 
-                await decodeContext.close();
 
-                // Calculate the output length based on playback speed.
-                // Slower playback produces a longer audio file.
-                // Faster playback produces a shorter audio file.
-                const outputLength = Math.ceil(
-                    audioBuffer.length / currentSpeed
-                ) + 1;
+        /*
+         * Load audio file.
+         */
 
-                // Create an offline context for rendering.
-                const offlineContext = new OfflineAudioContext(
-                    audioBuffer.numberOfChannels,
-                    outputLength,
-                    audioBuffer.sampleRate
-                );
+        fileInput.addEventListener(
+            "change",
+            async (event) => {
 
-                const source = offlineContext.createBufferSource();
+                const file =
+                    event.target.files[0];
 
-                source.buffer = audioBuffer;
+                if (!file) {
+                    return;
+                }
 
-                // This changes both speed and pitch naturally.
-                source.playbackRate.value = currentSpeed;
 
-                source.connect(offlineContext.destination);
-                source.start(0);
+                try {
 
-                // Render the processed audio.
-                const renderedBuffer =
-                    await offlineContext.startRendering();
+                    showStatus(
+                        "Loading audio..."
+                    );
 
-                // Convert the rendered audio to a WAV file.
-                const wavBlob = bufferToWav(renderedBuffer);
 
-                // Create a temporary download link.
-                const downloadUrl = URL.createObjectURL(wavBlob);
-                const link = document.createElement("a");
+                    /*
+                     * Read the file.
+                     */
 
-                link.href = downloadUrl;
-                link.download = "audio_speed_shifted.wav";
+                    rawArrayBuffer =
+                        await file.arrayBuffer();
 
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
 
-                // Release the temporary URL after the download starts.
-                setTimeout(() => {
-                    URL.revokeObjectURL(downloadUrl);
-                }, 1000);
+                    /*
+                     * Decode the audio.
+                     */
 
-                showStatus("WAV export completed!", "success");
-            } catch (error) {
-                console.error(error);
+                    const context =
+                        createAudioContext();
+
+                    audioBuffer =
+                        await context.decodeAudioData(
+                            rawArrayBuffer.slice(0)
+                        );
+
+
+                    /*
+                     * Update UI.
+                     */
+
+                    fileName.textContent =
+                        file.name;
+
+                    playButton.disabled = false;
+                    stopButton.disabled = false;
+                    exportButton.disabled = false;
+
+                    previewOffset = 0;
+
+                    updateSpeedDisplay();
+
+                    showStatus(
+                        "Audio loaded successfully.",
+                        "success"
+                    );
+
+                } catch (error) {
+
+                    console.error(error);
+
+                    showStatus(
+                        "Could not load the audio file: " +
+                        error.message,
+                        "error"
+                    );
+                }
+            }
+        );
+
+
+        /*
+         * Change speed.
+         */
+
+        speedSlider.addEventListener(
+            "input",
+            () => {
+
+                updateSpeedDisplay();
+
+
+                /*
+                 * If the audio is currently playing,
+                 * restart it at the new speed.
+                 *
+                 * This keeps the preview synchronized
+                 * with the slider.
+                 */
+
+                if (isPlaying) {
+
+                    const currentPosition =
+                        audioContext.currentTime -
+                        previewStartTime;
+
+                    const oldSpeed =
+                        parseFloat(
+                            speedSlider.value
+                        );
+
+                    previewOffset +=
+                        currentPosition * oldSpeed;
+
+                    previewOffset =
+                        Math.min(
+                            previewOffset,
+                            audioBuffer.duration
+                        );
+
+
+                    stopPreview(false);
+
+                    playPreview();
+                }
+            }
+        );
+
+
+        /*
+         * Start preview playback.
+         *
+         * IMPORTANT:
+         *
+         * playbackRate changes speed AND pitch.
+         *
+         * detune applies the exact opposite pitch
+         * change, keeping the original pitch.
+         */
+
+        async function playPreview() {
+
+            if (!audioBuffer) {
+                return;
+            }
+
+
+            const context =
+                createAudioContext();
+
+
+            if (context.state === "suspended") {
+                await context.resume();
+            }
+
+
+            /*
+             * Stop an existing source.
+             */
+
+            if (previewSource) {
+
+                try {
+                    previewSource.stop();
+                } catch (_) {}
+
+                previewSource = null;
+            }
+
+
+            const speed =
+                parseFloat(speedSlider.value);
+
+
+            /*
+             * Calculate the pitch change caused
+             * by the playback speed.
+             *
+             * Convert semitones to cents:
+             *
+             * 1 semitone = 100 cents
+             */
+
+            const semitones =
+                calculateSemitones(speed);
+
+            const cents =
+                semitones * 100;
+
+
+            /*
+             * Create a new source.
+             */
+
+            previewSource =
+                context.createBufferSource();
+
+            previewSource.buffer =
+                audioBuffer;
+
+
+            /*
+             * Speed up / slow down the audio.
+             */
+
+            previewSource.playbackRate.value =
+                speed;
+
+
+            /*
+             * Cancel the pitch change caused
+             * by playbackRate.
+             *
+             * Example:
+             *
+             * 1.5x playback
+             * naturally raises pitch by
+             * +7.02 semitones.
+             *
+             * detune = -702 cents
+             *
+             * Result:
+             * original pitch.
+             */
+
+            previewSource.detune.value =
+                -cents;
+
+
+            /*
+             * Connect to speakers.
+             */
+
+            previewSource.connect(
+                context.destination
+            );
+
+
+            /*
+             * Start playback.
+             */
+
+            previewStartTime =
+                context.currentTime;
+
+            previewSource.start(
+                0,
+                previewOffset
+            );
+
+            isPlaying = true;
+
+
+            /*
+             * Automatically reset when finished.
+             */
+
+            previewSource.onended = () => {
+
+                if (isPlaying) {
+
+                    isPlaying = false;
+
+                    previewOffset = 0;
+
+                    showStatus(
+                        "Playback finished."
+                    );
+                }
+            };
+
+
+            showStatus(
+                `Playing at ${Math.round(speed * 100)}% with original pitch.`
+            );
+        }
+
+
+        /*
+         * Play button.
+         */
+
+        playButton.addEventListener(
+            "click",
+            async () => {
+
+                if (isPlaying) {
+                    return;
+                }
+
+                await playPreview();
+            }
+        );
+
+
+        /*
+         * Stop preview.
+         */
+
+        function stopPreview(resetPosition = true) {
+
+            if (!previewSource) {
+                return;
+            }
+
+
+            try {
+                previewSource.stop();
+            } catch (_) {}
+
+
+            previewSource.disconnect();
+
+            previewSource = null;
+
+            isPlaying = false;
+
+
+            if (resetPosition) {
+                previewOffset = 0;
+            }
+        }
+
+
+        /*
+         * Stop button.
+         */
+
+        stopButton.addEventListener(
+            "click",
+            () => {
+
+                stopPreview(true);
 
                 showStatus(
-                    "Export failed: " + error.message,
-                    "error"
+                    "Playback stopped."
                 );
-            } finally {
-                isExporting = false;
-                exportButton.disabled = !rawArrayBuffer;
-                playButton.disabled = !rawArrayBuffer;
             }
-        });
+        );
 
-        // Convert an AudioBuffer into a standard 16-bit PCM WAV file.
+
+        /*
+         * Export audio as WAV.
+         */
+
+        exportButton.addEventListener(
+            "click",
+            async () => {
+
+                if (!audioBuffer || isExporting) {
+                    return;
+                }
+
+
+                isExporting = true;
+
+                exportButton.disabled = true;
+                playButton.disabled = true;
+
+                showStatus(
+                    "Rendering audio... Please wait."
+                );
+
+
+                try {
+
+                    const speed =
+                        parseFloat(
+                            speedSlider.value
+                        );
+
+
+                    /*
+                     * Calculate how long the output
+                     * needs to be.
+                     *
+                     * Faster = shorter
+                     * Slower = longer
+                     */
+
+                    const outputLength =
+                        Math.ceil(
+                            audioBuffer.length / speed
+                        ) + 1;
+
+
+                    /*
+                     * Create offline renderer.
+                     *
+                     * IMPORTANT:
+                     *
+                     * The sample rate remains unchanged.
+                     * We are NOT modifying the WAV header
+                     * to fake the speed.
+                     */
+
+                    const offlineContext =
+                        new OfflineAudioContext(
+                            audioBuffer.numberOfChannels,
+                            outputLength,
+                            audioBuffer.sampleRate
+                        );
+
+
+                    /*
+                     * Create source.
+                     */
+
+                    const source =
+                        offlineContext.createBufferSource();
+
+                    source.buffer =
+                        audioBuffer;
+
+
+                    /*
+                     * Calculate the natural pitch change.
+                     */
+
+                    const semitones =
+                        calculateSemitones(speed);
+
+                    const cents =
+                        semitones * 100;
+
+
+                    /*
+                     * Change playback speed.
+                     */
+
+                    source.playbackRate.value =
+                        speed;
+
+
+                    /*
+                     * Compensate pitch.
+                     *
+                     * This keeps the exported audio
+                     * at the ORIGINAL pitch.
+                     */
+
+                    source.detune.value =
+                        -cents;
+
+
+                    /*
+                     * Connect and start.
+                     */
+
+                    source.connect(
+                        offlineContext.destination
+                    );
+
+                    source.start(0);
+
+
+                    /*
+                     * Render the processed audio.
+                     */
+
+                    const renderedBuffer =
+                        await offlineContext.startRendering();
+
+
+                    /*
+                     * Convert to WAV.
+                     */
+
+                    const wavBlob =
+                        bufferToWav(
+                            renderedBuffer
+                        );
+
+
+                    /*
+                     * Create download.
+                     */
+
+                    const downloadUrl =
+                        URL.createObjectURL(
+                            wavBlob
+                        );
+
+                    const link =
+                        document.createElement("a");
+
+                    link.href =
+                        downloadUrl;
+
+                    link.download =
+                        "audio_speed_shifted.wav";
+
+
+                    document.body.appendChild(link);
+
+                    link.click();
+
+                    link.remove();
+
+
+                    /*
+                     * Clean up URL.
+                     */
+
+                    setTimeout(() => {
+
+                        URL.revokeObjectURL(
+                            downloadUrl
+                        );
+
+                    }, 1000);
+
+
+                    showStatus(
+                        "WAV export completed successfully.",
+                        "success"
+                    );
+
+                } catch (error) {
+
+                    console.error(error);
+
+                    showStatus(
+                        "Export failed: " +
+                        error.message,
+                        "error"
+                    );
+
+                } finally {
+
+                    isExporting = false;
+
+                    exportButton.disabled =
+                        !audioBuffer;
+
+                    playButton.disabled =
+                        !audioBuffer;
+                }
+            }
+        );
+
+
+        /*
+         * Convert AudioBuffer to 16-bit PCM WAV.
+         */
+
         function bufferToWav(buffer) {
-            const numChannels = buffer.numberOfChannels;
-            const sampleRate = buffer.sampleRate;
+
+            const numChannels =
+                buffer.numberOfChannels;
+
+            const sampleRate =
+                buffer.sampleRate;
+
             const bitsPerSample = 16;
 
-            const bytesPerSample = bitsPerSample / 8;
-            const blockAlign = numChannels * bytesPerSample;
+            const bytesPerSample =
+                bitsPerSample / 8;
+
+            const blockAlign =
+                numChannels *
+                bytesPerSample;
 
             const dataLength =
-                buffer.length * numChannels * bytesPerSample;
+                buffer.length *
+                numChannels *
+                bytesPerSample;
 
-            const wavBuffer = new ArrayBuffer(44 + dataLength);
-            const view = new DataView(wavBuffer);
 
-            // Write a string into the WAV header.
-            function writeString(offset, string) {
-                for (let i = 0; i < string.length; i++) {
-                    view.setUint8(offset + i, string.charCodeAt(i));
+            /*
+             * WAV file:
+             *
+             * 44 byte header
+             * +
+             * audio data
+             */
+
+            const wavBuffer =
+                new ArrayBuffer(
+                    44 + dataLength
+                );
+
+            const view =
+                new DataView(wavBuffer);
+
+
+            /*
+             * Write ASCII string.
+             */
+
+            function writeString(
+                offset,
+                string
+            ) {
+
+                for (
+                    let i = 0;
+                    i < string.length;
+                    i++
+                ) {
+
+                    view.setUint8(
+                        offset + i,
+                        string.charCodeAt(i)
+                    );
                 }
             }
 
-            // RIFF header.
-            writeString(0, "RIFF");
-            view.setUint32(4, 36 + dataLength, true);
-            writeString(8, "WAVE");
 
-            // Format chunk.
-            writeString(12, "fmt ");
-            view.setUint32(16, 16, true);
-            view.setUint16(20, 1, true); // PCM format
-            view.setUint16(22, numChannels, true);
-            view.setUint32(24, sampleRate, true);
+            /*
+             * RIFF header
+             */
+
+            writeString(
+                0,
+                "RIFF"
+            );
+
+            view.setUint32(
+                4,
+                36 + dataLength,
+                true
+            );
+
+            writeString(
+                8,
+                "WAVE"
+            );
+
+
+            /*
+             * fmt chunk
+             */
+
+            writeString(
+                12,
+                "fmt "
+            );
+
+            view.setUint32(
+                16,
+                16,
+                true
+            );
+
+            view.setUint16(
+                20,
+                1,
+                true
+            );
+
+            view.setUint16(
+                22,
+                numChannels,
+                true
+            );
+
+            view.setUint32(
+                24,
+                sampleRate,
+                true
+            );
+
             view.setUint32(
                 28,
                 sampleRate * blockAlign,
                 true
             );
-            view.setUint16(32, blockAlign, true);
-            view.setUint16(34, bitsPerSample, true);
 
-            // Data chunk.
-            writeString(36, "data");
-            view.setUint32(40, dataLength, true);
+            view.setUint16(
+                32,
+                blockAlign,
+                true
+            );
 
-            // Get the audio data for each channel.
+            view.setUint16(
+                34,
+                bitsPerSample,
+                true
+            );
+
+
+            /*
+             * data chunk
+             */
+
+            writeString(
+                36,
+                "data"
+            );
+
+            view.setUint32(
+                40,
+                dataLength,
+                true
+            );
+
+
+            /*
+             * Get channel data.
+             */
+
             const channels = [];
 
-            for (let channel = 0; channel < numChannels; channel++) {
-                channels.push(buffer.getChannelData(channel));
+            for (
+                let channel = 0;
+                channel < numChannels;
+                channel++
+            ) {
+
+                channels.push(
+                    buffer.getChannelData(
+                        channel
+                    )
+                );
             }
 
-            // Interleave channels and convert float samples to 16-bit PCM.
+
+            /*
+             * Interleave channels and
+             * convert Float32 to Int16.
+             */
+
             let offset = 44;
 
-            for (let i = 0; i < buffer.length; i++) {
-                for (let channel = 0; channel < numChannels; channel++) {
-                    let sample = channels[channel][i];
 
-                    // Clamp samples to the valid range.
-                    sample = Math.max(-1, Math.min(1, sample));
+            for (
+                let i = 0;
+                i < buffer.length;
+                i++
+            ) {
 
-                    const pcmSample = sample < 0
-                        ? Math.round(sample * 0x8000)
-                        : Math.round(sample * 0x7FFF);
+                for (
+                    let channel = 0;
+                    channel < numChannels;
+                    channel++
+                ) {
 
-                    view.setInt16(offset, pcmSample, true);
+                    let sample =
+                        channels[channel][i];
+
+
+                    /*
+                     * Clamp sample.
+                     */
+
+                    sample =
+                        Math.max(
+                            -1,
+                            Math.min(
+                                1,
+                                sample
+                            )
+                        );
+
+
+                    /*
+                     * Convert to 16-bit PCM.
+                     */
+
+                    const pcmSample =
+                        sample < 0
+                            ? Math.round(
+                                sample * 0x8000
+                            )
+                            : Math.round(
+                                sample * 0x7FFF
+                            );
+
+
+                    view.setInt16(
+                        offset,
+                        pcmSample,
+                        true
+                    );
+
                     offset += 2;
                 }
             }
 
+
             return new Blob(
                 [wavBuffer],
-                { type: "audio/wav" }
+                {
+                    type: "audio/wav"
+                }
             );
         }
 
-        // Initialize the display.
+
+        /*
+         * Initialize UI.
+         */
+
         updateSpeedDisplay();
+
     </script>
+
 </body>
 </html>
