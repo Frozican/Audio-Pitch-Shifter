@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audio Speed Shifter</title>
+<style>
+*{box-sizing:border-box}body{margin:0;padding:30px 16px;min-height:100vh;font-family:Arial,sans-serif;background:#121212;color:#f5f5f5;display:flex;justify-content:center;align-items:flex-start}.container{width:100%;max-width:700px;padding:30px;background:#1e1e1e;border:1px solid #333;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.35)}h1{margin:0 0 25px;text-align:center;font-size:26px}.section{margin-bottom:25px;padding:20px;background:#282828;border-radius:12px}.section h2{margin:0 0 16px;font-size:18px}input[type=file]{width:100%;padding:12px;background:#333;border:1px solid #444;border-radius:8px;color:#fff}.file-name{margin-top:10px;color:#aaa;font-size:14px;overflow-wrap:anywhere}.speed-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.speed-value{font-size:24px;font-weight:bold;color:#4cafef}input[type=range]{width:100%;accent-color:#4cafef;cursor:pointer}.range-labels{display:flex;justify-content:space-between;margin-top:8px;color:#aaa;font-size:12px}.pitch-info{margin-top:22px;text-align:center}.pitch-value{margin-bottom:12px;font-size:22px;font-weight:bold}.pitch-bar-container{position:relative;width:100%;height:14px;background:#444;border-radius:10px;overflow:hidden}.pitch-center{position:absolute;top:0;left:50%;width:2px;height:100%;background:#fff;z-index:2}.pitch-bar{position:absolute;top:0;left:50%;height:100%;width:0;background:#4cafef}.pitch-description{margin-top:10px;color:#aaa;font-size:13px}.controls{display:flex;gap:12px;margin-top:20px}button{flex:1;padding:13px 16px;border:none;border-radius:8px;background:#4cafef;color:#111;font-size:15px;font-weight:bold;cursor:pointer}button:hover:not(:disabled){background:#72c1f5}button:disabled{background:#555;color:#aaa;cursor:not-allowed}button.secondary{background:#444;color:#fff}button.secondary:hover:not(:disabled){background:#555}.status{margin-top:18px;min-height:20px;color:#aaa;font-size:14px;text-align:center;overflow-wrap:anywhere}.status.error{color:#ff6b6b}.status.success{color:#76d28b}.progress{display:none;width:100%;height:8px;margin-top:15px;background:#444;border-radius:10px;overflow:hidden}.progress-bar{width:0;height:100%;background:#4cafef;transition:width .05s linear}@media(max-width:500px){.container{padding:20px}h1{font-size:22px}.controls{flex-direction:column}}
+</style>
+</head>
+<body>
+<main class="container">
+<h1>Audio Speed Shifter</h1>
+<section class="section">
+<h2>Audio File</h2>
+<input type="file" id="fileInput" accept="audio/*">
+<div class="file-name" id="fileName">No file selected</div>
+</section>
+<section class="section">
+<h2>Speed</h2>
+<div class="speed-header"><label for="speedSlider">Playback Speed</label><span class="speed-value" id="speedValue">100%</span></div>
+<input type="range" id="speedSlider" min="0.5" max="2" step="0.05" value="1">
+<div class="range-labels"><span>50%</span><span>100%</span><span>150%</span><span>200%</span></div>
+<div class="pitch-info">
+<div class="pitch-value" id="pitchValue">Pitch: 0.00 semitones</div>
+<div class="pitch-bar-container"><div class="pitch-center"></div><div class="pitch-bar" id="pitchBar"></div></div>
+<div class="pitch-description">Natural pitch shift caused by speed. The audio processor compensates for it.</div>
+</div>
+</section>
+<section class="section">
+<h2>Playback &amp; Export</h2>
+<div class="controls"><button id="playButton" disabled>Play</button><button id="stopButton" class="secondary" disabled>Stop</button></div>
+<div class="controls"><button id="exportButton" disabled>Export as WAV</button></div>
+<div class="progress" id="progress"><div class="progress-bar" id="progressBar"></div></div>
+<div class="status" id="status">Load an audio file to get started.</div>
+</section>
+</main>
+<script>
+const fileInput=document.getElementById("fileInput");
+const fileName=document.getElementById("fileName");
+const speedSlider=document.getElementById("speedSlider");
+const speedValue=document.getElementById("speedValue");
+const pitchValue=document.getElementById("pitchValue");
+const pitchBar=document.getElementById("pitchBar");
+const playButton=document.getElementById("playButton");
+const stopButton=document.getElementById("stopButton");
+const exportButton=document.getElementById("exportButton");
+const status=document.getElementById("status");
+const progress=document.getElementById("progress");
+const progressBar=document.getElementById("progressBar");
+
+let audioContext=null;
+let originalBuffer=null;
+let processedBuffer=null;
+let sourceNode=null;
+let isPlaying=false;
+let isProcessing=false;
+let processingToken=0;
+
+function getAudioContext(){if(!audioContext)audioContext=new(window.AudioContext||window.webkitAudioContext)();return audioContext}
+function showStatus(message,type=""){status.textContent=message;status.className="status";if(type)status.classList.add(type)}
+
+function updateSpeedDisplay(){
+    const speed=parseFloat(speedSlider.value);
+    speedValue.textContent=`${Math.round(speed*100)}%`;
+
+    // This displays the natural pitch shift that speed would normally cause.
+    // The actual audio processor compensates for this, so the output pitch stays unchanged.
+    const pitchShift=12*Math.log2(speed);
+    const roundedPitch=pitchShift.toFixed(2);
+
+    if(pitchShift>0) pitchValue.textContent=`Pitch: +${roundedPitch} semitones`;
+    else if(pitchShift<0) pitchValue.textContent=`Pitch: ${roundedPitch} semitones`;
+    else pitchValue.textContent="Pitch: 0.00 semitones";
+
+    const maxPitch=12;
+    const percentage=Math.min(50,Math.abs(pitchShift)/maxPitch*50);
+
+    if(pitchShift>0){pitchBar.style.left="50%";pitchBar.style.width=`${percentage}%`}
+    else if(pitchShift<0){pitchBar.style.left=`${50-percentage}%`;pitchBar.style.width=`${percentage}%`}
+    else{pitchBar.style.left="50%";pitchBar.style.width="0%"}
+}
+speedSlider.addEventListener("input",()=>{processedBuffer=null;updateSpeedDisplay()});
+
+fileInput.addEventListener("change",async event=>{
+    const file=event.target.files[0];
+    if(!file)return;
+    try{
+        stopPlayback();
+        showStatus("Loading audio...");
+        const context=getAudioContext();
+        if(context.state==="suspended")await context.resume();
+        const arrayBuffer=await file.arrayBuffer();
+        originalBuffer=await context.decodeAudioData(arrayBuffer);
+        processedBuffer=null;
+        fileName.textContent=file.name;
+        playButton.disabled=false;
+        stopButton.disabled=false;
+        exportButton.disabled=false;
+        updateSpeedDisplay();
+        showStatus("Audio loaded successfully.","success");
+    }catch(error){console.error(error);showStatus("Could not load audio: "+error.message,"error")}
+});
+
+function timeStretch(inputBuffer,speed,onProgress,token){
+    const channels=inputBuffer.numberOfChannels;
+    const sampleRate=inputBuffer.sampleRate;
+    const inputLength=inputBuffer.length;
+    if(speed===1){
+        const copy=new AudioBuffer({length:inputLength,numberOfChannels:channels,sampleRate});
+        for(let channel=0;channel<channels;channel++)copy.getChannelData(channel).set(inputBuffer.getChannelData(channel));
+        return copy;
+    }
+    const N=Math.max(512,Math.round(sampleRate*.04));
+    const windowSize=N%2===0?N:N+1;
+    const overlap=Math.floor(windowSize/2);
+    const analysisHop=Math.max(1,Math.round(overlap*speed));
+    const synthesisHop=overlap;
+    const outputLength=Math.ceil(inputLength/speed)+windowSize;
+    const outputChannels=[];
+    const weight=new Float32Array(outputLength);
+    for(let channel=0;channel<channels;channel++)outputChannels.push(new Float32Array(outputLength));
+    const window=new Float32Array(windowSize);
+    for(let i=0;i<windowSize;i++)window[i]=.5-.5*Math.cos(2*Math.PI*i/(windowSize-1));
+    const inputChannels=[];
+    for(let channel=0;channel<channels;channel++)inputChannels.push(inputBuffer.getChannelData(channel));
+    const searchRadius=Math.floor(windowSize*.25);
+    let inputPosition=0;
+    let outputPosition=0;
+    let previousInputPosition=0;
+
+    while(inputPosition<inputLength&&outputPosition<outputLength){
+        if(token!==processingToken)return null;
+        let bestPosition=Math.round(inputPosition);
+        if(outputPosition>0){
+            const expected=Math.round(previousInputPosition+analysisHop);
+            let bestScore=-Infinity;
+            const minSearch=Math.max(0,expected-searchRadius);
+            const maxSearch=Math.min(inputLength-windowSize,expected+searchRadius);
+            const referenceChannel=inputChannels[0];
+            const compareLength=Math.min(overlap,inputLength-previousInputPosition-overlap,inputLength-bestPosition-overlap);
+            for(let candidate=minSearch;candidate<=maxSearch;candidate+=4){
+                let score=0;
+                const length=Math.min(overlap,inputLength-previousInputPosition-overlap,inputLength-candidate-overlap);
+                if(length<=16)continue;
+                for(let j=0;j<length;j+=4){
+                    const a=referenceChannel[previousInputPosition+j];
+                    const b=referenceChannel[candidate+j];
+                    score+=a*b;
+                }
+                if(score>bestScore){bestScore=score;bestPosition=candidate}
+            }
+        }
+        previousInputPosition=bestPosition;
+        for(let i=0;i<windowSize;i++){
+            const sourceIndex=bestPosition+i;
+            const destinationIndex=outputPosition+i;
+            if(sourceIndex>=inputLength||destinationIndex>=outputLength)break;
+            const windowValue=window[i];
+            weight[destinationIndex]+=windowValue;
+            for(let channel=0;channel<channels;channel++)outputChannels[channel][destinationIndex]+=inputChannels[channel][sourceIndex]*windowValue;
+        }
+        inputPosition=bestPosition+analysisHop;
+        outputPosition+=synthesisHop;
+        if(onProgress&&outputPosition%16384<synthesisHop)onProgress(Math.min(1,inputPosition/inputLength));
+    }
+
+    for(let i=0;i<outputLength;i++){
+        const normalization=weight[i];
+        if(normalization>0.00001){
+            const inverse=1/normalization;
+            for(let channel=0;channel<channels;channel++)outputChannels[channel][i]*=inverse;
+        }else{
+            for(let channel=0;channel<channels;channel++)outputChannels[channel][i]=0;
+        }
+    }
+    const finalLength=Math.min(Math.ceil(inputLength/speed),outputLength);
+    const result=new AudioBuffer({length:finalLength,numberOfChannels:channels,sampleRate});
+    for(let channel=0;channel<channels;channel++)result.getChannelData(channel).set(outputChannels[channel].subarray(0,finalLength));
+    if(onProgress)onProgress(1);
+    return result;
+}
+
+async function processAudio(){
+    if(!originalBuffer||isProcessing)return null;
+    isProcessing=true;
+    processingToken++;
+    const token=processingToken;
+    const speed=parseFloat(speedSlider.value);
+    progress.style.display="block";
+    progressBar.style.width="0%";
+    try{
+        await new Promise(resolve=>setTimeout(resolve,20));
+        const result=timeStretch(originalBuffer,speed,value=>{progressBar.style.width=`${value*100}%`},token);
+        if(token!==processingToken)return null;
+        processedBuffer=result;
+        return result;
+    }finally{
+        isProcessing=false;
+        setTimeout(()=>{progress.style.display="none"},300);
+    }
+}
+
+async function playProcessedAudio(){
+    if(!originalBuffer||isProcessing)return;
+    stopPlayback();
+    showStatus("Processing audio...");
+    const buffer=await processAudio();
+    if(!buffer)return;
+    const context=getAudioContext();
+    if(context.state==="suspended")await context.resume();
+    sourceNode=context.createBufferSource();
+    sourceNode.buffer=buffer;
+    sourceNode.playbackRate.value=1;
+    sourceNode.connect(context.destination);
+    sourceNode.onended=()=>{isPlaying=false;sourceNode=null;showStatus("Playback finished.")};
+    sourceNode.start();
+    isPlaying=true;
+    showStatus(`Playing at ${Math.round(parseFloat(speedSlider.value)*100)}% with unchanged pitch.`);
+}
+playButton.addEventListener("click",playProcessedAudio);
+function stopPlayback(){processingToken++;if(sourceNode){try{sourceNode.stop()}catch(_){}try{sourceNode.disconnect()}catch(_){}sourceNode=null}isPlaying=false}
+stopButton.addEventListener("click",()=>{stopPlayback();showStatus("Playback stopped.")});
+
+function bufferToWav(buffer){
+    const channels=buffer.numberOfChannels;
+    const sampleRate=buffer.sampleRate;
+    const bytesPerSample=2;
+    const blockAlign=channels*bytesPerSample;
+    const dataLength=buffer.length*blockAlign;
+    const arrayBuffer=new ArrayBuffer(44+dataLength);
+    const view=new DataView(arrayBuffer);
+    function writeString(offset,string){for(let i=0;i<string.length;i++)view.setUint8(offset+i,string.charCodeAt(i))}
+    writeString(0,"RIFF");view.setUint32(4,36+dataLength,true);writeString(8,"WAVE");writeString(12,"fmt ");view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,channels,true);view.setUint32(24,sampleRate,true);view.setUint32(28,sampleRate*blockAlign,true);view.setUint16(32,blockAlign,true);view.setUint16(34,16,true);writeString(36,"data");view.setUint32(40,dataLength,true);
+    const channelData=[];for(let channel=0;channel<channels;channel++)channelData.push(buffer.getChannelData(channel));
+    let offset=44;
+    for(let i=0;i<buffer.length;i++)for(let channel=0;channel<channels;channel++){
+        let sample=Math.max(-1,Math.min(1,channelData[channel][i]));
+        const pcm=sample<0?Math.round(sample*0x8000):Math.round(sample*0x7FFF);
+        view.setInt16(offset,pcm,true);offset+=2;
+    }
+    return new Blob([arrayBuffer],{type:"audio/wav"});
+}
+
+exportButton.addEventListener("click",async()=>{
+    if(!originalBuffer||isProcessing)return;
+    try{
+        exportButton.disabled=true;playButton.disabled=true;
+        showStatus("Processing audio for export...");
+        const buffer=await processAudio();
+        if(!buffer)return;
+        showStatus("Creating WAV file...");
+        const wav=bufferToWav(buffer);
+        const url=URL.createObjectURL(wav);
+        const link=document.createElement("a");
+        link.href=url;link.download="audio_speed_shifted.wav";document.body.appendChild(link);link.click();link.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),1000);
+        showStatus("WAV export completed successfully.","success");
+    }catch(error){console.error(error);showStatus("Export failed: "+error.message,"error")}
+    finally{exportButton.disabled=!originalBuffer;playButton.disabled=!originalBuffer}
+});
+
+updateSpeedDisplay();
+</script>
+</body>
+</html>
