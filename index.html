@@ -4,233 +4,540 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Audio Speed Shifter & Pitch Visualizer</title>
+
     <style>
-        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; line-height: 1.6; background-color: #f4f6f9; color: #333; }
-        .box { border: 1px solid #e0e0e0; padding: 25px; border-radius: 12px; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        h2 { margin-top: 0; color: #111; }
-        button { background: #007bff; color: white; border: none; padding: 10px 18px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-right: 10px; margin-top: 15px; transition: background 0.2s; }
-        button:hover:not(:disabled) { background: #0056b3; }
-        button:disabled { background: #ccc; cursor: not-allowed; }
-        .slider-container { margin: 20px 0; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #eaeded; }
-        .slider-label { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 8px; }
-        input[type="range"] { width: 100%; margin: 10px 0; cursor: pointer; }
-        .pitch-visualizer { margin-top: 15px; padding: 10px; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; }
-        .pitch-bar-container { position: relative; width: 100%; height: 12px; background: #edf2f7; border-radius: 6px; overflow: hidden; margin-top: 8px; }
-        .pitch-bar-center { position: absolute; left: 50%; top: 0; width: 2px; height: 100%; background: #a0aec0; z-index: 2; }
-        .pitch-bar-fill { position: absolute; height: 100%; top: 0; background: #3182ce; width: 0%; left: 50%; transition: width 0.1s ease, left 0.1s ease; }
-        .status { margin-top: 20px; font-weight: bold; color: #666; font-size: 0.95em; }
-        .info-text { font-size: 0.85em; color: #777; margin-top: 5px; }
-        audio { display: none; }
+        body {
+            font-family: sans-serif;
+            max-width: 500px;
+            margin: 40px auto;
+            padding: 20px;
+            line-height: 1.6;
+            background-color: #f4f6f9;
+            color: #333;
+        }
+
+        .box {
+            border: 1px solid #e0e0e0;
+            padding: 25px;
+            border-radius: 12px;
+            background: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #111;
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-top: 15px;
+            transition: background 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            background: #0056b3;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .slider-container {
+            margin: 20px 0;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #eaeded;
+        }
+
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin: 10px 0;
+            cursor: pointer;
+        }
+
+        .pitch-visualizer {
+            margin-top: 15px;
+            padding: 10px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+        }
+
+        .pitch-bar-container {
+            position: relative;
+            width: 100%;
+            height: 12px;
+            background: #edf2f7;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .pitch-bar-center {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            background: #a0aec0;
+            z-index: 2;
+        }
+
+        .pitch-bar-fill {
+            position: absolute;
+            height: 100%;
+            top: 0;
+            background: #3182ce;
+            width: 0%;
+            left: 50%;
+            transition: width 0.1s ease, left 0.1s ease;
+        }
+
+        .status {
+            margin-top: 20px;
+            font-weight: bold;
+            color: #666;
+            font-size: 0.95em;
+            padding: 8px;
+            border-radius: 4px;
+        }
+
+        .info-text {
+            font-size: 0.85em;
+            color: #777;
+            margin-top: 5px;
+        }
+
+        audio {
+            display: none;
+        }
+
+        .error-log {
+            margin-top: 15px;
+            padding: 10px;
+            background: #fff5f5;
+            color: #c53030;
+            font-family: monospace;
+            font-size: 0.8em;
+            border-radius: 6px;
+            border: 1px solid #fed7d7;
+            display: none;
+        }
     </style>
 </head>
+
 <body>
 
-<div class="box">
-    <h2>Audio Speed Shifter</h2>
-    <p>Upload an audio file and adjust the speed. The pitch shift will be automatically visualized and compensated.</p>
-    
-    <input type="file" id="audioFile" accept="audio/*"><br>
-    
-    <audio id="htmlAudio" crossorigin="anonymous"></audio>
-    
-    <div class="slider-container">
-        <div class="slider-label">
-            <span>Speed:</span>
-            <span id="speedVal">100% (Normal)</span>
-        </div>
-        <input type="range" id="speedSlider" min="0.5" max="2.0" step="0.05" value="1.0" disabled>
-        
-        <div class="pitch-visualizer">
-            <div class="slider-label" style="font-size: 0.85em; margin-bottom: 0;">
-                <span>Pitch Deviation:</span>
-                <span id="pitchText">0.00 semitones</span>
+    <div class="box">
+        <h2>Audio Speed Shifter</h2>
+
+        <p>
+            Upload an audio file and adjust the speed.
+            The pitch shift will be automatically visualized and compensated.
+        </p>
+
+        <input type="file" id="audioFile" accept="audio/*"><br>
+
+        <audio
+            id="htmlAudio"
+            crossorigin="anonymous"
+            preload="auto"
+        ></audio>
+
+        <div class="slider-container">
+            <div class="slider-label">
+                <span>Speed:</span>
+                <span id="speedVal">100% (Normal)</span>
             </div>
-            <div class="pitch-bar-container">
-                <div class="pitch-bar-center"></div>
-                <div id="pitchBar" class="pitch-bar-fill"></div>
+
+            <input
+                type="range"
+                id="speedSlider"
+                min="0.5"
+                max="2.0"
+                step="0.05"
+                value="1.0"
+                disabled
+            >
+
+            <div class="pitch-visualizer">
+                <div
+                    class="slider-label"
+                    style="font-size: 0.85em; margin-bottom: 0;"
+                >
+                    <span>Pitch Deviation:</span>
+                    <span id="pitchText">0.00 semitones</span>
+                </div>
+
+                <div class="pitch-bar-container">
+                    <div class="pitch-bar-center"></div>
+                    <div id="pitchBar" class="pitch-bar-fill"></div>
+                </div>
+
+                <div id="pitchInfo" class="info-text">
+                    Automatic compensation: 0.00 semitones applied.
+                </div>
             </div>
-            <div id="pitchInfo" class="info-text">Automatic compensation: 0.00 semitones applied.</div>
         </div>
+
+        <button id="btnPlay" disabled>Play</button>
+        <button id="btnStop" disabled>Stop</button>
+        <button id="btnExport" disabled>Export as WAV</button>
+
+        <div
+            id="status"
+            class="status"
+            style="background: #e2e8f0;"
+        >
+            Please select an audio file...
+        </div>
+
+        <div id="errorLog" class="error-log"></div>
     </div>
-    
-    <button id="btnPlay" disabled>Play</button>
-    <button id="btnStop" disabled>Stop</button>
-    <button id="btnExport" disabled>Export as WAV</button>
-    
-    <div id="status" class="status">Please select an audio file...</div>
-</div>
 
-<script>
-let audioCtx = null;
-let audioSource = null;
-let rawArrayBuffer = null;
+    <script>
+        let audioCtx = null;
+        let audioSource = null;
+        let rawArrayBuffer = null;
 
-const fileInput = document.getElementById('audioFile');
-const htmlAudio = document.getElementById('htmlAudio');
-const speedSlider = document.getElementById('speedSlider');
-const speedVal = document.getElementById('speedVal');
-const pitchText = document.getElementById('pitchText');
-const pitchBar = document.getElementById('pitchBar');
-const pitchInfo = document.getElementById('pitchInfo');
-const btnPlay = document.getElementById('btnPlay');
-const btnStop = document.getElementById('btnStop');
-const btnExport = document.getElementById('btnExport');
-const statusDiv = document.getElementById('status');
+        const fileInput = document.getElementById("audioFile");
+        const htmlAudio = document.getElementById("htmlAudio");
+        const speedSlider = document.getElementById("speedSlider");
+        const speedVal = document.getElementById("speedVal");
+        const pitchText = document.getElementById("pitchText");
+        const pitchBar = document.getElementById("pitchBar");
+        const pitchInfo = document.getElementById("pitchInfo");
+        const btnPlay = document.getElementById("btnPlay");
+        const btnStop = document.getElementById("btnStop");
+        const btnExport = document.getElementById("btnExport");
+        const statusDiv = document.getElementById("status");
+        const errorLog = document.getElementById("errorLog");
 
-function calculateSemitones(speed) {
-    if (speed <= 0) return 0;
-    return 12 * Math.log2(speed);
-}
+        function showError(msg, err) {
+            errorLog.style.display = "block";
+            errorLog.textContent =
+                msg + (err ? " | Details: " + err.message : "");
 
-// 1. Fully mobile-compliant File Reader (Reads as DataURL string to bypass restrictions)
-fileInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+            statusDiv.style.background = "#fed7d7";
+            statusDiv.style.color = "#9b2c2c";
+        }
 
-    statusDiv.textContent = "Processing audio file for mobile context...";
-    
-    const reader = new FileReader();
-    
-    reader.onload = async (event) => {
-        // Direct assignment bypassing standard Blob URL security shields
-        htmlAudio.src = event.target.result;
-        
-        // Convert to array buffer in the background for desktop/mobile exports
-        const bufferReader = new FileReader();
-        bufferReader.onload = (bufEvent) => {
-            rawArrayBuffer = bufEvent.target.result;
-            
-            // Instantly activate UI controls without waiting for the browser to trigger metadata queries
-            statusDiv.textContent = "File successfully loaded! Adjust speed and press Play.";
-            btnPlay.disabled = false;
-            speedSlider.disabled = false;
-            btnExport.disabled = false;
-        };
-        bufferReader.readAsArrayBuffer(file);
-    };
-    
-    reader.readAsDataURL(file);
-});
+        function calculateSemitones(speed) {
+            if (speed <= 0) return 0;
+            return 12 * Math.log2(speed);
+        }
 
-// Update indicators and modify runtime context variables
-speedSlider.addEventListener('input', (e) => {
-    const speed = parseFloat(e.target.value);
-    speedVal.textContent = `${Math.round(speed * 100)}%`;
-    
-    const semitones = calculateSemitones(speed);
-    
-    if (semitones === 0) {
-        pitchText.textContent = "0.00 semitones";
-        pitchInfo.textContent = "Automatic compensation: 0.00 semitones applied.";
-    } else {
-        const direction = semitones > 0 ? "+" : "";
-        pitchText.textContent = `${direction}${semitones.toFixed(2)} semitones`;
-        pitchInfo.textContent = `Automatic compensation: -${semitones.toFixed(2)} semitones applied.`;
-    }
+        // 1. Unified file handler using instant object URLs with fallback checks
+        fileInput.addEventListener("change", async (e) => {
+            const file = e.target.files[0];
 
-    const percentageOfMax = (semitones / 12) * 50;
-    if (semitones >= 0) {
-        pitchBar.style.left = "50%";
-        pitchBar.style.width = `${percentageOfMax}%`;
-        pitchBar.style.backgroundColor = "#3182ce";
-    } else {
-        pitchBar.style.left = `${50 + percentageOfMax}%`;
-        pitchBar.style.width = `${Math.abs(percentageOfMax)}%`;
-        pitchBar.style.backgroundColor = "#e53e3e";
-    }
+            if (!file) return;
 
-    htmlAudio.playbackRate = speed;
-    htmlAudio.preservesPitch = true; 
-});
+            errorLog.style.display = "none";
+            statusDiv.style.background = "#ebf8ff";
+            statusDiv.style.color = "#2b6cb0";
+            statusDiv.textContent = "Processing target audio track...";
 
-// 2. Main Play Execution Group
-btnPlay.addEventListener('click', () => {
-    if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        audioSource = audioCtx.createMediaElementSource(htmlAudio);
-        audioSource.connect(audioCtx.destination);
-    }
-    
-    if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-    }
+            try {
+                // Create standard object URL
+                const fileURL = URL.createObjectURL(file);
+                htmlAudio.src = fileURL;
 
-    htmlAudio.playbackRate = parseFloat(speedSlider.value);
-    htmlAudio.preservesPitch = true;
-    
-    htmlAudio.play()
-        .then(() => {
-            btnStop.disabled = false;
-            statusDiv.textContent = "Playing modified audio track live...";
-        })
-        .catch(err => {
-            statusDiv.textContent = "Playback error. Try resetting the tracker.";
-            console.error(err);
+                // Mobile listener hook: instantly fires when layout framework initializes the sound container
+                htmlAudio.onloadedmetadata = () => {
+                    statusDiv.style.background = "#f0fff4";
+                    statusDiv.style.color = "#22543d";
+                    statusDiv.textContent =
+                        "File metadata loaded! Press Play to start.";
+
+                    btnPlay.disabled = false;
+                    speedSlider.disabled = false;
+                    btnExport.disabled = false;
+                };
+
+                // Asynchronously read the array buffer for download generation tasks in background
+                const reader = new FileReader();
+
+                reader.onload = (event) => {
+                    rawArrayBuffer = event.target.result;
+                };
+
+                reader.onerror = (err) => {
+                    showError("Background buffer engine failed.", err);
+                };
+
+                reader.readAsArrayBuffer(file);
+            } catch (err) {
+                showError("Initialization error.", err);
+            }
         });
-});
 
-btnStop.addEventListener('click', () => {
-    htmlAudio.pause();
-    btnStop.disabled = true;
-    statusDiv.textContent = "Playback paused.";
-});
+        // Update dynamic UI slider fields
+        speedSlider.addEventListener("input", (e) => {
+            const speed = parseFloat(e.target.value);
 
-// 3. Export engine
-btnExport.addEventListener('click', async () => {
-    if (!rawArrayBuffer) return;
-    statusDiv.textContent = "Processing high-quality export... Please wait.";
-    btnExport.disabled = true;
+            speedVal.textContent = `${Math.round(speed * 100)}%`;
 
-    const currentSpeed = parseFloat(speedSlider.value);
-    const exportCtx = new (window.AudioContext || window.webkitAudioContext)();
-    
-    try {
-        const buffer = await exportCtx.decodeAudioData(rawArrayBuffer.slice(0));
-        const renderDuration = buffer.duration / currentSpeed;
-        const sampleRate = buffer.sampleRate;
-        const length = Math.floor(renderDuration * sampleRate);
+            const semitones = calculateSemitones(speed);
 
-        const offlineCtx = new OfflineAudioContext(buffer.numberOfChannels, length, sampleRate);
-        const source = offlineCtx.createBufferSource();
-        source.buffer = buffer;
-        source.playbackRate.value = currentSpeed;
-        source.detune.value = -calculateSemitones(currentSpeed) * 100;
+            if (semitones === 0) {
+                pitchText.textContent = "0.00 semitones";
+                pitchInfo.textContent =
+                    "Automatic compensation: 0.00 semitones applied.";
+            } else {
+                const direction = semitones > 0 ? "+" : "";
 
-        source.connect(offlineCtx.destination);
-        source.start(0);
+                pitchText.textContent =
+                    `${direction}${semitones.toFixed(2)} semitones`;
 
-        const renderedBuffer = await offlineCtx.startRendering();
-        const wavBlob = bufferToWav(renderedBuffer);
-        
-        const url = URL.createObjectURL(wavBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `audio_speed_${Math.round(currentSpeed*100)}.wav`;
-        a.click();
+                pitchInfo.textContent =
+                    `Automatic compensation: -${semitones.toFixed(2)} semitones applied.`;
+            }
 
-        statusDiv.textContent = "Export completed successfully!";
-    } catch (err) {
-        statusDiv.textContent = "Export failed. Mobile hardware memory limit.";
-        console.error(err);
-    }
-    btnExport.disabled = false;
-});
+            const percentageOfMax = (semitones / 12) * 50;
 
-function bufferToWav(buffer) {
-    const numOfChan = buffer.numberOfChannels, length = buffer.length * numOfChan * 2 + 44, bufferArr = new ArrayBuffer(length), view = new DataView(bufferArr), channels = [], sampleRate = buffer.sampleRate;
-    let pos = 0;
-    function setUint32(data) { view.setUint32(pos, data, true); pos += 4; }
-    function setUint16(data) { view.setUint16(pos, data, true); pos += 2; }
-    setUint32(0x46464952); setUint32(length - 8); setUint32(0x45564157); setUint32(0x20746d66); setUint32(16); setUint16(1); setUint16(numOfChan); setUint32(sampleRate); setUint32(sampleRate * 2 * numOfChan); setUint16(numOfChan * 2); setUint16(16); setUint32(0x61746164); setUint32(length - pos - 4);
-    for (let i = 0; i < numOfChan; i++) { channels.push(buffer.getChannelData(i)); }
-    let index = 0;
-    while (index < buffer.length) {
-        for (let i = 0; i < numOfChan; i++) {
-    let sample = Math.max(-1, Math.min(1, channels[i][index]));
-    sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
-    view.setInt16(pos, sample, true); pos += 2;
-    }
-    index++;
-    }
-    return new Blob([bufferArr], { type: 'audio/wav' });
-    }
+            if (semitones >= 0) {
+                pitchBar.style.left = "50%";
+                pitchBar.style.width = `${percentageOfMax}%`;
+                pitchBar.style.backgroundColor = "#3182ce";
+            } else {
+                pitchBar.style.left = `${50 + percentageOfMax}%`;
+                pitchBar.style.width = `${Math.abs(percentageOfMax)}%`;
+                pitchBar.style.backgroundColor = "#e53e3e";
+            }
+
+            htmlAudio.playbackRate = speed;
+            htmlAudio.preservesPitch = true;
+        });
+
+        // 2. Play Audio Action Hook
+        btnPlay.addEventListener("click", () => {
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (
+                        window.AudioContext ||
+                        window.webkitAudioContext
+                    )();
+
+                    audioSource =
+                        audioCtx.createMediaElementSource(htmlAudio);
+
+                    audioSource.connect(audioCtx.destination);
+                }
+
+                if (audioCtx.state === "suspended") {
+                    audioCtx.resume();
+                }
+
+                htmlAudio.playbackRate =
+                    parseFloat(speedSlider.value);
+
+                htmlAudio.preservesPitch = true;
+
+                htmlAudio.play()
+                    .then(() => {
+                        btnStop.disabled = false;
+                        statusDiv.textContent =
+                            "Playing modified audio track live...";
+                    })
+                    .catch((err) => {
+                        showError(
+                            "Mobile engine blocked playback execution.",
+                            err
+                        );
+                    });
+            } catch (err) {
+                showError(
+                    "Audio execution context initialization crashed.",
+                    err
+                );
+            }
+        });
+
+        btnStop.addEventListener("click", () => {
+            htmlAudio.pause();
+            btnStop.disabled = true;
+            statusDiv.textContent = "Playback paused.";
+        });
+
+        // 3. Export engine
+        btnExport.addEventListener("click", async () => {
+            if (!rawArrayBuffer) {
+                showError(
+                    "File processing is incomplete. Please wait.",
+                    null
+                );
+                return;
+            }
+
+            statusDiv.textContent =
+                "Processing high-quality export... Please wait.";
+
+            btnExport.disabled = true;
+
+            const currentSpeed =
+                parseFloat(speedSlider.value);
+
+            const exportCtx = new (
+                window.AudioContext ||
+                window.webkitAudioContext
+            )();
+
+            try {
+                const buffer =
+                    await exportCtx.decodeAudioData(
+                        rawArrayBuffer.slice(0)
+                    );
+
+                const renderDuration =
+                    buffer.duration / currentSpeed;
+
+                const sampleRate = buffer.sampleRate;
+
+                const length =
+                    Math.floor(renderDuration * sampleRate);
+
+                const offlineCtx =
+                    new OfflineAudioContext(
+                        buffer.numberOfChannels,
+                        length,
+                        sampleRate
+                    );
+
+                const source =
+                    offlineCtx.createBufferSource();
+
+                source.buffer = buffer;
+                source.playbackRate.value = currentSpeed;
+
+                source.detune.value =
+                    -calculateSemitones(currentSpeed) * 100;
+
+                source.connect(offlineCtx.destination);
+                source.start(0);
+
+                const renderedBuffer =
+                    await offlineCtx.startRendering();
+
+                const wavBlob =
+                    bufferToWav(renderedBuffer);
+
+                const url =
+                    URL.createObjectURL(wavBlob);
+
+                const a = document.createElement("a");
+
+                a.href = url;
+                a.download =
+                    `audio_speed_${Math.round(currentSpeed * 100)}.wav`;
+
+                a.click();
+
+                statusDiv.textContent =
+                    "Export completed successfully!";
+            } catch (err) {
+                showError(
+                    "Export parsing exception occurred.",
+                    err
+                );
+            }
+
+            btnExport.disabled = false;
+        });
+
+        function bufferToWav(buffer) {
+            const numOfChan = buffer.numberOfChannels;
+            const length =
+                buffer.length * numOfChan * 2 + 44;
+
+            const bufferArr =
+                new ArrayBuffer(length);
+
+            const view =
+                new DataView(bufferArr);
+
+            const channels = [];
+            const sampleRate = buffer.sampleRate;
+
+            let pos = 0;
+
+            function setUint32(data) {
+                view.setUint32(pos, data, true);
+                pos += 4;
+            }
+
+            function setUint16(data) {
+                view.setUint16(pos, data, true);
+                pos += 2;
+            }
+
+            setUint32(0x46464952);
+            setUint32(length - 8);
+            setUint32(0x45564157);
+            setUint32(0x20746d66);
+            setUint32(16);
+            setUint16(1);
+            setUint16(numOfChan);
+            setUint32(sampleRate);
+            setUint32(sampleRate * 2 * numOfChan);
+            setUint16(numOfChan * 2);
+            setUint16(16);
+            setUint32(0x61746164);
+            setUint32(length - pos - 4);
+
+            for (let i = 0; i < numOfChan; i++) {
+                channels.push(buffer.getChannelData(i));
+            }
+
+            let index = 0;
+
+            while (index < buffer.length) {
+                for (let i = 0; i < numOfChan; i++) {
+                    let sample = Math.max(
+                        -1,
+                        Math.min(1, channels[i][index])
+                    );
+
+                    sample =
+                        sample < 0
+                            ? sample * 0x8000
+                            : sample * 0x7FFF;
+
+                    view.setInt16(
+                        pos,
+                        sample,
+                        true
+                    );
+
+                    pos += 2;
+                }
+
+                index++;
+            }
+
+            return new Blob(
+                [bufferArr],
+                { type: "audio/wav" }
+            );
+        }
+    </script>
+
+</body>
+</html>
