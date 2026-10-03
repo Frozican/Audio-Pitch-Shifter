@@ -31,7 +31,6 @@
     
     <input type="file" id="audioFile" accept="audio/*"><br>
     
-    <!-- Audio element with crossOrigin setting to prevent mobile browser blocks -->
     <audio id="htmlAudio" crossorigin="anonymous"></audio>
     
     <div class="slider-container">
@@ -83,33 +82,37 @@ function calculateSemitones(speed) {
     return 12 * Math.log2(speed);
 }
 
-// 1. Handle File Upload (Immediate ObjectURL binding)
-fileInput.addEventListener('change', async (e) => {
+// 1. Fully mobile-compliant File Reader (Reads as DataURL string to bypass restrictions)
+fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    statusDiv.textContent = "Loading file into player...";
+    statusDiv.textContent = "Processing audio file for mobile context...";
     
-    const fileURL = URL.createObjectURL(file);
-    htmlAudio.src = fileURL;
-    htmlAudio.load(); // Force layout reload for mobile engines
+    const reader = new FileReader();
     
-    // Read array buffer for background export functionality
-    rawArrayBuffer = await file.arrayBuffer();
-
-    htmlAudio.oncanplaythrough = () => {
-        statusDiv.textContent = "File ready! Adjust the speed slider and press Play or Export.";
-        btnPlay.disabled = false;
-        speedSlider.disabled = false;
-        btnExport.disabled = false;
+    reader.onload = async (event) => {
+        // Direct assignment bypassing standard Blob URL security shields
+        htmlAudio.src = event.target.result;
+        
+        // Convert to array buffer in the background for desktop/mobile exports
+        const bufferReader = new FileReader();
+        bufferReader.onload = (bufEvent) => {
+            rawArrayBuffer = bufEvent.target.result;
+            
+            // Instantly activate UI controls without waiting for the browser to trigger metadata queries
+            statusDiv.textContent = "File successfully loaded! Adjust speed and press Play.";
+            btnPlay.disabled = false;
+            speedSlider.disabled = false;
+            btnExport.disabled = false;
+        };
+        bufferReader.readAsArrayBuffer(file);
     };
     
-    htmlAudio.onerror = () => {
-        statusDiv.textContent = "Error loading audio file format.";
-    };
+    reader.readAsDataURL(file);
 });
 
-// Update UI and adjust engine metrics dynamically
+// Update indicators and modify runtime context variables
 speedSlider.addEventListener('input', (e) => {
     const speed = parseFloat(e.target.value);
     speedVal.textContent = `${Math.round(speed * 100)}%`;
@@ -136,12 +139,11 @@ speedSlider.addEventListener('input', (e) => {
         pitchBar.style.backgroundColor = "#e53e3e";
     }
 
-    // Set high-quality pitch behavior directly on the streaming tag
     htmlAudio.playbackRate = speed;
     htmlAudio.preservesPitch = true; 
 });
 
-// 2. Playback handling (Completely unified event)
+// 2. Main Play Execution Group
 btnPlay.addEventListener('click', () => {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -162,7 +164,7 @@ btnPlay.addEventListener('click', () => {
             statusDiv.textContent = "Playing modified audio track live...";
         })
         .catch(err => {
-            statusDiv.textContent = "Playback blocked by device. Try clicking again.";
+            statusDiv.textContent = "Playback error. Try resetting the tracker.";
             console.error(err);
         });
 });
@@ -173,7 +175,7 @@ btnStop.addEventListener('click', () => {
     statusDiv.textContent = "Playback paused.";
 });
 
-// 3. Native Background Processing Export Pipeline
+// 3. Export engine
 btnExport.addEventListener('click', async () => {
     if (!rawArrayBuffer) return;
     statusDiv.textContent = "Processing high-quality export... Please wait.";
@@ -208,7 +210,7 @@ btnExport.addEventListener('click', async () => {
 
         statusDiv.textContent = "Export completed successfully!";
     } catch (err) {
-        statusDiv.textContent = "Export failed. Mobile memory restriction.";
+        statusDiv.textContent = "Export failed. Mobile hardware memory limit.";
         console.error(err);
     }
     btnExport.disabled = false;
@@ -224,7 +226,7 @@ function bufferToWav(buffer) {
     let index = 0;
     while (index < buffer.length) {
         for (let i = 0; i < numOfChan; i++) {
-            let sample = Math.max(-1, Math.min(1, channels[i][index]));
+    let sample = Math.max(-1, Math.min(1, channels[i][index]));
     sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
     view.setInt16(pos, sample, true); pos += 2;
     }
