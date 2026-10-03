@@ -31,8 +31,8 @@
     
     <input type="file" id="audioFile" accept="audio/*"><br>
     
-    <!-- Hidden HTML5 Audio Element for rock-solid mobile streaming -->
-    <audio id="htmlAudio"></audio>
+    <!-- Audio element with crossOrigin setting to prevent mobile browser blocks -->
+    <audio id="htmlAudio" crossorigin="anonymous"></audio>
     
     <div class="slider-container">
         <div class="slider-label">
@@ -64,7 +64,7 @@
 <script>
 let audioCtx = null;
 let audioSource = null;
-let rawArrayBuffer = null; // Stored only for the export fallback
+let rawArrayBuffer = null;
 
 const fileInput = document.getElementById('audioFile');
 const htmlAudio = document.getElementById('htmlAudio');
@@ -83,22 +83,22 @@ function calculateSemitones(speed) {
     return 12 * Math.log2(speed);
 }
 
-// 1. Handle File Upload (Instant Stream-Loading)
+// 1. Handle File Upload (Immediate ObjectURL binding)
 fileInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     statusDiv.textContent = "Loading file into player...";
     
-    // Create a local blob URL for the audio element (lightweight & instantaneous)
     const fileURL = URL.createObjectURL(file);
     htmlAudio.src = fileURL;
+    htmlAudio.load(); // Force layout reload for mobile engines
     
-    // Store array buffer in background for export processing
+    // Read array buffer for background export functionality
     rawArrayBuffer = await file.arrayBuffer();
 
     htmlAudio.oncanplaythrough = () => {
-        statusDiv.textContent = "File ready! Adjust the speed and press Play or Export.";
+        statusDiv.textContent = "File ready! Adjust the speed slider and press Play or Export.";
         btnPlay.disabled = false;
         speedSlider.disabled = false;
         btnExport.disabled = false;
@@ -109,7 +109,7 @@ fileInput.addEventListener('change', async (e) => {
     };
 });
 
-// Update UI and Real-Time Pitch/Speed Effects
+// Update UI and adjust engine metrics dynamically
 speedSlider.addEventListener('input', (e) => {
     const speed = parseFloat(e.target.value);
     speedVal.textContent = `${Math.round(speed * 100)}%`;
@@ -136,16 +136,12 @@ speedSlider.addEventListener('input', (e) => {
         pitchBar.style.backgroundColor = "#e53e3e";
     }
 
-    // Live update the browser player engine
+    // Set high-quality pitch behavior directly on the streaming tag
     htmlAudio.playbackRate = speed;
-    if (audioSource && audioCtx) {
-        // Since HTMLAudio preserves pitch by default, we toggle it to false
-        // to let the Web Audio API detune handle custom modifications if needed
-        htmlAudio.preservesPitch = true; 
-    }
+    htmlAudio.preservesPitch = true; 
 });
 
-// 2. Play / Stop functionality using HTML5 Stream Node
+// 2. Playback handling (Completely unified event)
 btnPlay.addEventListener('click', () => {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -158,17 +154,26 @@ btnPlay.addEventListener('click', () => {
     }
 
     htmlAudio.playbackRate = parseFloat(speedSlider.value);
-    htmlAudio.preservesPitch = true; // High-quality native time-stretching 
+    htmlAudio.preservesPitch = true;
     
-    htmlAudio.play();
-    btnStop.disabled = false;
-    statusDiv.textContent = "Playing modified audio track live...";
+    htmlAudio.play()
+        .then(() => {
+            btnStop.disabled = false;
+            statusDiv.textContent = "Playing modified audio track live...";
+        })
+        .catch(err => {
+            statusDiv.textContent = "Playback blocked by device. Try clicking again.";
+            console.error(err);
+        });
 });
 
-btnPlay.addEventListener('click', () => { htmlAudio.play(); btnStop.disabled = false; statusDiv.textContent = "Playing live..."; });
-btnStop.addEventListener('click', () => { htmlAudio.pause(); btnStop.disabled = true; statusDiv.textContent = "Playback paused."; });
+btnStop.addEventListener('click', () => {
+    htmlAudio.pause();
+    btnStop.disabled = true;
+    statusDiv.textContent = "Playback paused.";
+});
 
-// 3. Background Export Functionality
+// 3. Native Background Processing Export Pipeline
 btnExport.addEventListener('click', async () => {
     if (!rawArrayBuffer) return;
     statusDiv.textContent = "Processing high-quality export... Please wait.";
@@ -203,7 +208,7 @@ btnExport.addEventListener('click', async () => {
 
         statusDiv.textContent = "Export completed successfully!";
     } catch (err) {
-        statusDiv.textContent = "Export failed. File is too large for mobile RAM.";
+        statusDiv.textContent = "Export failed. Mobile memory restriction.";
         console.error(err);
     }
     btnExport.disabled = false;
@@ -219,7 +224,7 @@ function bufferToWav(buffer) {
     let index = 0;
     while (index < buffer.length) {
         for (let i = 0; i < numOfChan; i++) {
-    let sample = Math.max(-1, Math.min(1, channels[i][index]));
+            let sample = Math.max(-1, Math.min(1, channels[i][index]));
     sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
     view.setInt16(pos, sample, true); pos += 2;
     }
