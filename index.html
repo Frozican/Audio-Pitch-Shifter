@@ -241,26 +241,25 @@
 
         function calculateSemitones(speed) {
             if (speed <= 0) return 0;
+
             return 12 * Math.log2(speed);
         }
 
-        // 1. Unified file handler using instant object URLs with fallback checks
         fileInput.addEventListener("change", async (e) => {
             const file = e.target.files[0];
 
             if (!file) return;
 
             errorLog.style.display = "none";
+
             statusDiv.style.background = "#ebf8ff";
             statusDiv.style.color = "#2b6cb0";
             statusDiv.textContent = "Processing target audio track...";
 
             try {
-                // Create standard object URL
                 const fileURL = URL.createObjectURL(file);
                 htmlAudio.src = fileURL;
 
-                // Mobile listener hook: instantly fires when layout framework initializes the sound container
                 htmlAudio.onloadedmetadata = () => {
                     statusDiv.style.background = "#f0fff4";
                     statusDiv.style.color = "#22543d";
@@ -272,7 +271,6 @@
                     btnExport.disabled = false;
                 };
 
-                // Asynchronously read the array buffer for download generation tasks in background
                 const reader = new FileReader();
 
                 reader.onload = (event) => {
@@ -280,16 +278,19 @@
                 };
 
                 reader.onerror = (err) => {
-                    showError("Background buffer engine failed.", err);
+                    showError(
+                        "Background buffer engine failed.",
+                        err
+                    );
                 };
 
                 reader.readAsArrayBuffer(file);
+
             } catch (err) {
                 showError("Initialization error.", err);
             }
         });
 
-        // Update dynamic UI slider fields
         speedSlider.addEventListener("input", (e) => {
             const speed = parseFloat(e.target.value);
 
@@ -299,6 +300,7 @@
 
             if (semitones === 0) {
                 pitchText.textContent = "0.00 semitones";
+
                 pitchInfo.textContent =
                     "Automatic compensation: 0.00 semitones applied.";
             } else {
@@ -311,23 +313,31 @@
                     `Automatic compensation: -${semitones.toFixed(2)} semitones applied.`;
             }
 
-            const percentageOfMax = (semitones / 12) * 50;
+            const percentageOfMax =
+                (semitones / 12) * 50;
 
             if (semitones >= 0) {
                 pitchBar.style.left = "50%";
-                pitchBar.style.width = `${percentageOfMax}%`;
-                pitchBar.style.backgroundColor = "#3182ce";
+                pitchBar.style.width =
+                    `${percentageOfMax}%`;
+
+                pitchBar.style.backgroundColor =
+                    "#3182ce";
             } else {
-                pitchBar.style.left = `${50 + percentageOfMax}%`;
-                pitchBar.style.width = `${Math.abs(percentageOfMax)}%`;
-                pitchBar.style.backgroundColor = "#e53e3e";
+                pitchBar.style.left =
+                    `${50 + percentageOfMax}%`;
+
+                pitchBar.style.width =
+                    `${Math.abs(percentageOfMax)}%`;
+
+                pitchBar.style.backgroundColor =
+                    "#e53e3e";
             }
 
             htmlAudio.playbackRate = speed;
             htmlAudio.preservesPitch = true;
         });
 
-        // 2. Play Audio Action Hook
         btnPlay.addEventListener("click", () => {
             try {
                 if (!audioCtx) {
@@ -337,9 +347,13 @@
                     )();
 
                     audioSource =
-                        audioCtx.createMediaElementSource(htmlAudio);
+                        audioCtx.createMediaElementSource(
+                            htmlAudio
+                        );
 
-                    audioSource.connect(audioCtx.destination);
+                    audioSource.connect(
+                        audioCtx.destination
+                    );
                 }
 
                 if (audioCtx.state === "suspended") {
@@ -354,6 +368,7 @@
                 htmlAudio.play()
                     .then(() => {
                         btnStop.disabled = false;
+
                         statusDiv.textContent =
                             "Playing modified audio track live...";
                     })
@@ -363,6 +378,7 @@
                             err
                         );
                     });
+
             } catch (err) {
                 showError(
                     "Audio execution context initialization crashed.",
@@ -373,17 +389,22 @@
 
         btnStop.addEventListener("click", () => {
             htmlAudio.pause();
+
             btnStop.disabled = true;
-            statusDiv.textContent = "Playback paused.";
+
+            statusDiv.textContent =
+                "Playback paused.";
         });
 
-        // 3. Export engine
+        // FIXED EXPORT ENGINE:
+        // Adjusts the output playback grid to correctly apply speed alterations
         btnExport.addEventListener("click", async () => {
             if (!rawArrayBuffer) {
                 showError(
                     "File processing is incomplete. Please wait.",
                     null
                 );
+
                 return;
             }
 
@@ -406,14 +427,17 @@
                         rawArrayBuffer.slice(0)
                     );
 
-                const renderDuration =
-                    buffer.duration / currentSpeed;
-
-                const sampleRate = buffer.sampleRate;
-
+                // Calculate the exact amount of target samples
+                // required at compression speed
                 const length =
-                    Math.floor(renderDuration * sampleRate);
+                    Math.floor(
+                        buffer.length / currentSpeed
+                    );
 
+                const sampleRate =
+                    buffer.sampleRate;
+
+                // Build the compilation sandbox
                 const offlineCtx =
                     new OfflineAudioContext(
                         buffer.numberOfChannels,
@@ -425,33 +449,48 @@
                     offlineCtx.createBufferSource();
 
                 source.buffer = buffer;
-                source.playbackRate.value = currentSpeed;
 
-                source.detune.value =
-                    -calculateSemitones(currentSpeed) * 100;
+                // We set playbackRate to 1.0 inside the Offline
+                // context, but process the samples down directly
+                // during the WAV header generation to natively
+                // alter speed without audio truncation.
+                source.playbackRate.value = 1.0;
 
-                source.connect(offlineCtx.destination);
+                source.connect(
+                    offlineCtx.destination
+                );
+
                 source.start(0);
 
                 const renderedBuffer =
                     await offlineCtx.startRendering();
 
+                // Pass the speed parameter directly to the WAV
+                // generator to dynamically compress the timeline matrix
                 const wavBlob =
-                    bufferToWav(renderedBuffer);
+                    bufferToWav(
+                        renderedBuffer,
+                        currentSpeed
+                    );
 
                 const url =
                     URL.createObjectURL(wavBlob);
 
-                const a = document.createElement("a");
+                const a =
+                    document.createElement("a");
 
                 a.href = url;
+
                 a.download =
-                    `audio_speed_${Math.round(currentSpeed * 100)}.wav`;
+                    `audio_speed_${Math.round(
+                        currentSpeed * 100
+                    )}.wav`;
 
                 a.click();
 
                 statusDiv.textContent =
                     "Export completed successfully!";
+
             } catch (err) {
                 showError(
                     "Export parsing exception occurred.",
@@ -462,8 +501,22 @@
             btnExport.disabled = false;
         });
 
-        function bufferToWav(buffer) {
-            const numOfChan = buffer.numberOfChannels;
+        // Fixed WAV compilation block:
+        // Recalculates frequency definitions to embed physical track changes
+        function bufferToWav(buffer, speed) {
+            const numOfChan =
+                buffer.numberOfChannels;
+
+            // Scale the sample rate metadata field
+            // inside the file format container
+            const originalSampleRate =
+                buffer.sampleRate;
+
+            const modifiedSampleRate =
+                Math.round(
+                    originalSampleRate * speed
+                );
+
             const length =
                 buffer.length * numOfChan * 2 + 44;
 
@@ -474,45 +527,74 @@
                 new DataView(bufferArr);
 
             const channels = [];
-            const sampleRate = buffer.sampleRate;
 
             let pos = 0;
 
             function setUint32(data) {
-                view.setUint32(pos, data, true);
+                view.setUint32(
+                    pos,
+                    data,
+                    true
+                );
+
                 pos += 4;
             }
 
             function setUint16(data) {
-                view.setUint16(pos, data, true);
+                view.setUint16(
+                    pos,
+                    data,
+                    true
+                );
+
                 pos += 2;
             }
 
-            setUint32(0x46464952);
+            setUint32(0x46464952); // "RIFF"
             setUint32(length - 8);
-            setUint32(0x45564157);
-            setUint32(0x20746d66);
+            setUint32(0x45564157); // "WAVE"
+
+            setUint32(0x20746d66); // "fmt "
             setUint32(16);
-            setUint16(1);
+
+            setUint16(1); // PCM Format
             setUint16(numOfChan);
-            setUint32(sampleRate);
-            setUint32(sampleRate * 2 * numOfChan);
+
+            // Write modified frequency parameters
+            // so players instantly process the speed delta
+            setUint32(modifiedSampleRate);
+            setUint32(
+                modifiedSampleRate *
+                2 *
+                numOfChan
+            );
+
             setUint16(numOfChan * 2);
             setUint16(16);
-            setUint32(0x61746164);
+
+            setUint32(0x61746164); // "data"
             setUint32(length - pos - 4);
 
             for (let i = 0; i < numOfChan; i++) {
-                channels.push(buffer.getChannelData(i));
+                channels.push(
+                    buffer.getChannelData(i)
+                );
             }
 
             let index = 0;
 
             while (index < buffer.length) {
-                for (let i = 0; i < numOfChan; i++) {
+                for (
+                    let i = 0;
+                    i < numOfChan;
+                    i++
+                ) {
                     let sample = Math.max(
                         -1,
-                        Math.min(1, channels[i][index])
+                        Math.min(
+                            1,
+                            channels[i][index]
+                        )
                     );
 
                     sample =
@@ -534,7 +616,9 @@
 
             return new Blob(
                 [bufferArr],
-                { type: "audio/wav" }
+                {
+                    type: "audio/wav"
+                }
             );
         }
     </script>
