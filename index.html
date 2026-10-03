@@ -14,15 +14,13 @@
         .slider-container { margin: 20px 0; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #eaeded; }
         .slider-label { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 8px; }
         input[type="range"] { width: 100%; margin: 10px 0; cursor: pointer; }
-        
-        /* New Pitch Visualizer Styling */
         .pitch-visualizer { margin-top: 15px; padding: 10px; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; }
         .pitch-bar-container { position: relative; width: 100%; height: 12px; background: #edf2f7; border-radius: 6px; overflow: hidden; margin-top: 8px; }
         .pitch-bar-center { position: absolute; left: 50%; top: 0; width: 2px; height: 100%; background: #a0aec0; z-index: 2; }
         .pitch-bar-fill { position: absolute; height: 100%; top: 0; background: #3182ce; width: 0%; left: 50%; transition: width 0.1s ease, left 0.1s ease; }
-        
         .status { margin-top: 20px; font-weight: bold; color: #666; font-size: 0.95em; }
         .info-text { font-size: 0.85em; color: #777; margin-top: 5px; }
+        audio { display: none; }
     </style>
 </head>
 <body>
@@ -33,6 +31,9 @@
     
     <input type="file" id="audioFile" accept="audio/*"><br>
     
+    <!-- Hidden HTML5 Audio Element for rock-solid mobile streaming -->
+    <audio id="htmlAudio"></audio>
+    
     <div class="slider-container">
         <div class="slider-label">
             <span>Speed:</span>
@@ -40,7 +41,6 @@
         </div>
         <input type="range" id="speedSlider" min="0.5" max="2.0" step="0.05" value="1.0" disabled>
         
-        <!-- Pitch Visualizer Display -->
         <div class="pitch-visualizer">
             <div class="slider-label" style="font-size: 0.85em; margin-bottom: 0;">
                 <span>Pitch Deviation:</span>
@@ -63,10 +63,11 @@
 
 <script>
 let audioCtx = null;
-let audioBuffer = null;
-let currentSource = null;
+let audioSource = null;
+let rawArrayBuffer = null; // Stored only for the export fallback
 
 const fileInput = document.getElementById('audioFile');
+const htmlAudio = document.getElementById('htmlAudio');
 const speedSlider = document.getElementById('speedSlider');
 const speedVal = document.getElementById('speedVal');
 const pitchText = document.getElementById('pitchText');
@@ -77,21 +78,44 @@ const btnStop = document.getElementById('btnStop');
 const btnExport = document.getElementById('btnExport');
 const statusDiv = document.getElementById('status');
 
-// Helper function: Calculates semitones based on speed change
 function calculateSemitones(speed) {
     if (speed <= 0) return 0;
     return 12 * Math.log2(speed);
 }
 
-// Update UI and Live Audio on Slider Input
+// 1. Handle File Upload (Instant Stream-Loading)
+fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    statusDiv.textContent = "Loading file into player...";
+    
+    // Create a local blob URL for the audio element (lightweight & instantaneous)
+    const fileURL = URL.createObjectURL(file);
+    htmlAudio.src = fileURL;
+    
+    // Store array buffer in background for export processing
+    rawArrayBuffer = await file.arrayBuffer();
+
+    htmlAudio.oncanplaythrough = () => {
+        statusDiv.textContent = "File ready! Adjust the speed and press Play or Export.";
+        btnPlay.disabled = false;
+        speedSlider.disabled = false;
+        btnExport.disabled = false;
+    };
+    
+    htmlAudio.onerror = () => {
+        statusDiv.textContent = "Error loading audio file format.";
+    };
+});
+
+// Update UI and Real-Time Pitch/Speed Effects
 speedSlider.addEventListener('input', (e) => {
     const speed = parseFloat(e.target.value);
-    const percent = Math.round(speed * 100);
-    speedVal.textContent = `${percent}%`;
+    speedVal.textContent = `${Math.round(speed * 100)}%`;
     
     const semitones = calculateSemitones(speed);
     
-    // Update text indicators
     if (semitones === 0) {
         pitchText.textContent = "0.00 semitones";
         pitchInfo.textContent = "Automatic compensation: 0.00 semitones applied.";
@@ -101,159 +125,103 @@ speedSlider.addEventListener('input', (e) => {
         pitchInfo.textContent = `Automatic compensation: -${semitones.toFixed(2)} semitones applied.`;
     }
 
-    // Update visualizer bar
-    // Max slider range is 0.5x (-12 semitones) to 2.0x (+12 semitones)
-    // We map -12 to +12 semitones to a 0% - 100% width scale centered at 50%
-    const maxSemitones = 12; 
-    const percentageOfMax = (semitones / maxSemitones) * 50; // Max 50% left or right from center
-
+    const percentageOfMax = (semitones / 12) * 50;
     if (semitones >= 0) {
         pitchBar.style.left = "50%";
         pitchBar.style.width = `${percentageOfMax}%`;
-        pitchBar.style.backgroundColor = "#3182ce"; // Blue for higher pitch
+        pitchBar.style.backgroundColor = "#3182ce";
     } else {
         pitchBar.style.left = `${50 + percentageOfMax}%`;
         pitchBar.style.width = `${Math.abs(percentageOfMax)}%`;
-        pitchBar.style.backgroundColor = "#e53e3e"; // Red for lower pitch
+        pitchBar.style.backgroundColor = "#e53e3e";
     }
 
-    // Apply directly if audio is currently playing
-    if (currentSource && audioCtx) {
-        currentSource.playbackRate.value = speed;
-        currentSource.detune.value = -semitones * 100;
-    }
-});
-
-// 1. Read and Decode File
-fileInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    statusDiv.textContent = "Loading and decoding audio file...";
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    
-    const arrayBuffer = await file.arrayBuffer();
-    
-    try {
-        audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-        statusDiv.textContent = "File ready! Adjust the speed slider and press Play or Export.";
-        btnPlay.disabled = false;
-        speedSlider.disabled = false;
-        btnExport.disabled = false;
-    } catch (err) {
-        statusDiv.textContent = "Error decoding audio file.";
-        console.error(err);
+    // Live update the browser player engine
+    htmlAudio.playbackRate = speed;
+    if (audioSource && audioCtx) {
+        // Since HTMLAudio preserves pitch by default, we toggle it to false
+        // to let the Web Audio API detune handle custom modifications if needed
+        htmlAudio.preservesPitch = true; 
     }
 });
 
-// 2. Setup Audio Processing Pipeline
-function setupAudioPipeline(context, buffer, speed) {
-    const source = context.createBufferSource();
-    source.buffer = buffer;
-    source.playbackRate.value = speed;
-    
-    const semitones = calculateSemitones(speed);
-    source.detune.value = -semitones * 100; // Counteract the speed-induced pitch shift
-
-    return source;
-}
-
-// 3. Live Browser Playback
+// 2. Play / Stop functionality using HTML5 Stream Node
 btnPlay.addEventListener('click', () => {
-    if (!audioBuffer) return;
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        audioSource = audioCtx.createMediaElementSource(htmlAudio);
+        audioSource.connect(audioCtx.destination);
+    }
     
-    if (currentSource) currentSource.stop();
-
     if (audioCtx.state === 'suspended') {
         audioCtx.resume();
     }
 
-    const currentSpeed = parseFloat(speedSlider.value);
-    currentSource = setupAudioPipeline(audioCtx, audioBuffer, currentSpeed);
-    currentSource.connect(audioCtx.destination);
-    currentSource.start(0);
+    htmlAudio.playbackRate = parseFloat(speedSlider.value);
+    htmlAudio.preservesPitch = true; // High-quality native time-stretching 
     
+    htmlAudio.play();
     btnStop.disabled = false;
     statusDiv.textContent = "Playing modified audio track live...";
 });
 
-btnStop.addEventListener('click', () => {
-    if (currentSource) {
-        currentSource.stop();
-        btnStop.disabled = true;
-        statusDiv.textContent = "Playback stopped.";
-    }
-});
+btnPlay.addEventListener('click', () => { htmlAudio.play(); btnStop.disabled = false; statusDiv.textContent = "Playing live..."; });
+btnStop.addEventListener('click', () => { htmlAudio.pause(); btnStop.disabled = true; statusDiv.textContent = "Playback paused."; });
 
-// 4. EXPORT AUDIO FUNCTION (Saves current slider state)
+// 3. Background Export Functionality
 btnExport.addEventListener('click', async () => {
-    if (!audioBuffer) return;
-    
-    statusDiv.textContent = "Exporting audio with settings... Please wait.";
+    if (!rawArrayBuffer) return;
+    statusDiv.textContent = "Processing high-quality export... Please wait.";
     btnExport.disabled = true;
 
     const currentSpeed = parseFloat(speedSlider.value);
-    const renderDuration = audioBuffer.duration / currentSpeed;
-    const sampleRate = audioBuffer.sampleRate;
-    const length = Math.floor(renderDuration * sampleRate);
-
-    const offlineCtx = new OfflineAudioContext(audioBuffer.numberOfChannels, length, sampleRate);
+    const exportCtx = new (window.AudioContext || window.webkitAudioContext)();
     
-    const offlineSource = setupAudioPipeline(offlineCtx, audioBuffer, currentSpeed);
-    offlineSource.connect(offlineCtx.destination);
-    offlineSource.start(0);
+    try {
+        const buffer = await exportCtx.decodeAudioData(rawArrayBuffer.slice(0));
+        const renderDuration = buffer.duration / currentSpeed;
+        const sampleRate = buffer.sampleRate;
+        const length = Math.floor(renderDuration * sampleRate);
 
-    const renderedBuffer = await offlineCtx.startRendering();
-    const wavBlob = bufferToWav(renderedBuffer);
-    
-    const url = URL.createObjectURL(wavBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `audio_speed_${Math.round(currentSpeed*100)}.wav`;
-    a.click();
+        const offlineCtx = new OfflineAudioContext(buffer.numberOfChannels, length, sampleRate);
+        const source = offlineCtx.createBufferSource();
+        source.buffer = buffer;
+        source.playbackRate.value = currentSpeed;
+        source.detune.value = -calculateSemitones(currentSpeed) * 100;
 
-    statusDiv.textContent = "Export completed successfully! Check your downloads.";
+        source.connect(offlineCtx.destination);
+        source.start(0);
+
+        const renderedBuffer = await offlineCtx.startRendering();
+        const wavBlob = bufferToWav(renderedBuffer);
+        
+        const url = URL.createObjectURL(wavBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `audio_speed_${Math.round(currentSpeed*100)}.wav`;
+        a.click();
+
+        statusDiv.textContent = "Export completed successfully!";
+    } catch (err) {
+        statusDiv.textContent = "Export failed. File is too large for mobile RAM.";
+        console.error(err);
+    }
     btnExport.disabled = false;
 });
 
-// AudioBuffer to WAV File Helper
 function bufferToWav(buffer) {
-    const numOfChan = buffer.numberOfChannels,
-          length = buffer.length * numOfChan * 2 + 44,
-          bufferArr = new ArrayBuffer(length),
-          view = new DataView(bufferArr),
-          channels = [],
-          sampleRate = buffer.sampleRate;
-    
+    const numOfChan = buffer.numberOfChannels, length = buffer.length * numOfChan * 2 + 44, bufferArr = new ArrayBuffer(length), view = new DataView(bufferArr), channels = [], sampleRate = buffer.sampleRate;
     let pos = 0;
     function setUint32(data) { view.setUint32(pos, data, true); pos += 4; }
     function setUint16(data) { view.setUint16(pos, data, true); pos += 2; }
-
-    setUint32(0x46464952); // "RIFF"
-    setUint32(length - 8); 
-    setUint32(0x45564157); // "WAVE"
-    setUint32(0x20746d66); // "fmt "
-    setUint32(16);         
-    setUint16(1);          // PCM
-    setUint16(numOfChan);
-    setUint32(sampleRate);
-    setUint32(sampleRate * 2 * numOfChan); 
-    setUint16(numOfChan * 2);             
-    setUint16(16);                        
-    setUint32(0x61746164); // "data"
-    setUint32(length - pos - 4); 
-
-    for (let i = 0; i < numOfChan; i++) {
-        channels.push(buffer.getChannelData(i));
-    }
-
+    setUint32(0x46464952); setUint32(length - 8); setUint32(0x45564157); setUint32(0x20746d66); setUint32(16); setUint16(1); setUint16(numOfChan); setUint32(sampleRate); setUint32(sampleRate * 2 * numOfChan); setUint16(numOfChan * 2); setUint16(16); setUint32(0x61746164); setUint32(length - pos - 4);
+    for (let i = 0; i < numOfChan; i++) { channels.push(buffer.getChannelData(i)); }
     let index = 0;
     while (index < buffer.length) {
-    for (let i = 0; i < numOfChan; i++) {
+        for (let i = 0; i < numOfChan; i++) {
     let sample = Math.max(-1, Math.min(1, channels[i][index]));
     sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
-    view.setInt16(pos, sample, true);
-    pos += 2;
+    view.setInt16(pos, sample, true); pos += 2;
     }
     index++;
     }
