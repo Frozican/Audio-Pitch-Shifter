@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Speed & Pitch Shifter (mit Export)</title>
+    <style>
+        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; line-height: 1.6; }
+        .box { border: 1px solid #ccc; padding: 20px; border-radius: 8px; background: #f9f9f9; }
+        button { background: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; margin-right: 10px; margin-top: 10px; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .status { margin-top: 15px; font-weight: bold; color: #555; }
+    </style>
+</head>
+<body>
+
+<div class="box">
+    <h2>Audio Shifter</h2>
+    <p>Datei hochladen, um sie um <b>50% zu beschleunigen</b> und um <b>7 Halbtöne tiefer</b> zu stimmen.</p>
+    
+    <input type="file" id="audioFile" accept="audio/*"><br><br>
+    
+    <button id="btnPlay" disabled>Abspielen</button>
+    <button id="btnStop" disabled>Stopp</button>
+    <button id="btnExport" disabled>Als WAV Exportieren</button>
+    
+    <div id="status" class="status">Bitte eine Audiodatei auswählen...</div>
+</div>
+
+<script>
+let audioCtx = null;
+let audioBuffer = null;
+let currentSource = null;
+
+const fileInput = document.getElementById('audioFile');
+const btnPlay = document.getElementById('btnPlay');
+const btnStop = document.getElementById('btnStop');
+const btnExport = document.getElementById('btnExport');
+const statusDiv = document.getElementById('status');
+
+// 1. Datei einlesen und decodieren
+fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    statusDiv.textContent = "Datei wird geladen...";
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    const arrayBuffer = await file.arrayBuffer();
+    
+    try {
+        audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        statusDiv.textContent = "Datei erfolgreich geladen! Bereit zum Abspielen oder Exportieren.";
+        btnPlay.disabled = false;
+        btnExport.disabled = false;
+    } catch (err) {
+        statusDiv.textContent = "Fehler beim Dekodieren der Audiodatei.";
+        console.error(err);
+    }
+});
+
+// 2. Audio-Effekte konfigurieren (Wichtigster Teil!)
+function setupAudioPipeline(context, buffer) {
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+
+    // 50% schneller machen (Faktor 1.5)
+    source.playbackRate.value = 1.5;
+
+    // Detune berechnen: -7 Halbtöne (1 Halbton = 100 Cents)
+    // Da wir playbackRate auf 1.5 setzen, erhöht sich die Tonhöhe automatisch.
+    // Ein detune von -700 Cents drückt die Tonhöhe exakt wieder auf die Original-Tonhöhe herunter.
+    source.detune.value = -700; 
+
+    return source;
+}
+
+// 3. Live-Wiedergabe im Browser
+btnPlay.addEventListener('click', () => {
+    if (!audioBuffer) return;
+    
+    // Falls bereits etwas läuft, stoppen
+    if (currentSource) currentSource.stop();
+
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+
+    currentSource = setupAudioPipeline(audioCtx, audioBuffer);
+    currentSource.connect(audioCtx.destination);
+    currentSource.start(0);
+    
+    btnStop.disabled = false;
+    statusDiv.textContent = "Spiele modifiziertes Audio ab...";
+});
+
+btnStop.addEventListener('click', () => {
+    if (currentSource) {
+        currentSource.stop();
+        btnStop.disabled = true;
+        statusDiv.textContent = "Wiedergabe gestoppt.";
+    }
+});
+
+// 4. EXPORT-FUNKTION (Nutzt OfflineAudioContext für schnelles Rendern im Hintergrund)
+btnExport.addEventListener('click', async () => {
+    if (!audioBuffer) return;
+    
+    statusDiv.textContent = "Exportiere... Bitte warten.";
+    btnExport.disabled = true;
+
+    // Neue Länge berechnen (Da 1.5x schneller, wird das Audio kürzer)
+    const renderDuration = audioBuffer.duration / 1.5;
+    const sampleRate = audioBuffer.sampleRate;
+    const length = Math.floor(renderDuration * sampleRate);
+
+    // Offline Context erstellen (rendert nicht hörbar, sondern im Speicher)
+    const offlineCtx = new OfflineAudioContext(audioBuffer.numberOfChannels, length, sampleRate);
+    
+    const offlineSource = setupAudioPipeline(offlineCtx, audioBuffer);
+    offlineSource.connect(offlineCtx.destination);
+    offlineSource.start(0);
+
+    // Audio rendern
+    const renderedBuffer = await offlineCtx.startRendering();
+    
+    // In WAV-Format konvertieren
+    const wavBlob = bufferToWav(renderedBuffer);
+    
+    // Download-Link erzeugen und automatisch klicken
+    const url = URL.createObjectURL(wavBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'beschleunigt_und_tiefer.wav';
+    a.click();
+
+    statusDiv.textContent = "Export abgeschlossen! Datei heruntergeladen.";
+    btnExport.disabled = false;
+});
+
+// Hilfsfunktion: Konvertiert einen AudioBuffer in eine gültige WAV-Datei (Binary Blob)
+function bufferToWav(buffer) {
+    const numOfChan = buffer.numberOfChannels,
+          length = buffer.length * numOfChan * 2 + 44,
+          bufferArr = new ArrayBuffer(length),
+          view = new DataView(bufferArr),
+          channels = [], i, sample,
+          offset = 0,
+          pos = 0;
+
+    // WAV Header schreiben
+    function setUint32(data) { view.setUint32(pos, data, true); pos += 4; }
+    function setUint16(data) { view.setUint16(pos, data, true); pos += 2; }
+
+    setUint32(0x46464952); // "RIFF"
+    setUint32(length - 8); // Dateigröße - 8
+    setUint32(0x45564157); // "WAVE"
+    setUint32(0x20746d66); // "fmt " chunk
+    setUint32(16);         // Chunk-Größe (16)
+    setUint16(1);          // Audio Format (1 = unkomprimiertes PCM)
+    setUint16(numOfChan);
+    setUint32(buffer.sampleRate);
+    setUint32(buffer.sampleRate * 2 * numOfChan); // Byte Rate
+    setUint16(numOfChan * 2);                     // Block Align
+    setUint16(16);                                // Bits per Sample (16-bit)
+    setUint32(0x61746164); // "data" chunk
+    setUint32(length - pos - 4); // Chunk-Größe
+
+    // Audio-Kanäle auslesen
+    for (let i = 0; i < numOfChan; i++) {
+        channels.push(buffer.getChannelData(i));
+    }
+
+    // Interleaving (Kanäle verschachteln) und PCM-Daten schreiben
+    let index = 0;
+    while (index < buffer.length) {
+        for (let i = 0; i < numOfChan; i++) {
+            sample = Math.max(-1, Math.min(1, channels[i][index])); // Clipping verhindern
+            sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF; // Zu 16-Bit PCM konvertieren
+            view.setInt16(pos, sample, true);
+            pos += 2;
+        }
+        index++;
+    }
+
+    return new Blob([bufferArr], { type: 'audio/wav' });
+}
+</script>
+
+</body>
+</html>
