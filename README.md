@@ -97,6 +97,8 @@ Performance can vary depending on the length and complexity of the audio file.
 ```text
 Audio-Pitch-Shifter/
 └── index.html
+└── README.md
+└── LICENSE
 ```
 
 The application logic, user interface, audio processing, and WAV export are contained in `index.html`.
