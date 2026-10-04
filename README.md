@@ -1,4 +1,4 @@
-# Audio Speed Shifter
+# Audio Speed/Pitch Shifter
 
 A browser-based audio speed shifter that changes the playback speed of audio while keeping the original pitch unchanged.
 
