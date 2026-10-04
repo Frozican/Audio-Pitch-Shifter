@@ -56,6 +56,7 @@ let sourceNode=null;
 let isPlaying=false;
 let isProcessing=false;
 let processingToken=0;
+let processedSpeed=null;
 
 function getAudioContext(){if(!audioContext)audioContext=new(window.AudioContext||window.webkitAudioContext)();return audioContext}
 function showStatus(message,type=""){status.textContent=message;status.className="status";if(type)status.classList.add(type)}
@@ -80,7 +81,7 @@ function updateSpeedDisplay(){
     else if(pitchShift<0){pitchBar.style.left=`${50-percentage}%`;pitchBar.style.width=`${percentage}%`}
     else{pitchBar.style.left="50%";pitchBar.style.width="0%"}
 }
-speedSlider.addEventListener("input",()=>{processedBuffer=null;updateSpeedDisplay()});
+speedSlider.addEventListener("input",()=>{processedBuffer=null;processedSpeed=null;updateSpeedDisplay()});
 
 fileInput.addEventListener("change",async event=>{
     const file=event.target.files[0];
@@ -93,6 +94,7 @@ fileInput.addEventListener("change",async event=>{
         const arrayBuffer=await file.arrayBuffer();
         originalBuffer=await context.decodeAudioData(arrayBuffer);
         processedBuffer=null;
+        processedSpeed=null;
         fileName.textContent=file.name;
         playButton.disabled=false;
         stopButton.disabled=false;
@@ -102,102 +104,374 @@ fileInput.addEventListener("change",async event=>{
     }catch(error){console.error(error);showStatus("Could not load audio: "+error.message,"error")}
 });
 
-function timeStretch(inputBuffer,speed,onProgress,token){
-    const channels=inputBuffer.numberOfChannels;
-    const sampleRate=inputBuffer.sampleRate;
-    const inputLength=inputBuffer.length;
-    if(speed===1){
-        const copy=new AudioBuffer({length:inputLength,numberOfChannels:channels,sampleRate});
-        for(let channel=0;channel<channels;channel++)copy.getChannelData(channel).set(inputBuffer.getChannelData(channel));
+function timeStretch(inputBuffer, speed, onProgress, token) {
+    const channels = inputBuffer.numberOfChannels;
+    const sampleRate = inputBuffer.sampleRate;
+    const inputLength = inputBuffer.length;
+
+    if (speed === 1) {
+        const copy = new AudioBuffer({
+            length: inputLength,
+            numberOfChannels: channels,
+            sampleRate
+        });
+
+        for (let channel = 0; channel < channels; channel++) {
+            copy.getChannelData(channel).set(
+                inputBuffer.getChannelData(channel)
+            );
+        }
+
         return copy;
     }
-    const N=Math.max(512,Math.round(sampleRate*.04));
-    const windowSize=N%2===0?N:N+1;
-    const overlap=Math.floor(windowSize/2);
-    const analysisHop=Math.max(1,Math.round(overlap*speed));
-    const synthesisHop=overlap;
-    const outputLength=Math.ceil(inputLength/speed)+windowSize;
-    const outputChannels=[];
-    const weight=new Float32Array(outputLength);
-    for(let channel=0;channel<channels;channel++)outputChannels.push(new Float32Array(outputLength));
-    const window=new Float32Array(windowSize);
-    for(let i=0;i<windowSize;i++)window[i]=.5-.5*Math.cos(2*Math.PI*i/(windowSize-1));
-    const inputChannels=[];
-    for(let channel=0;channel<channels;channel++)inputChannels.push(inputBuffer.getChannelData(channel));
-    const searchRadius=Math.floor(windowSize*.25);
-    let inputPosition=0;
-    let outputPosition=0;
-    let previousInputPosition=0;
 
-    while(inputPosition<inputLength&&outputPosition<outputLength){
-        if(token!==processingToken)return null;
-        let bestPosition=Math.round(inputPosition);
-        if(outputPosition>0){
-            const expected=Math.round(previousInputPosition+analysisHop);
-            let bestScore=-Infinity;
-            const minSearch=Math.max(0,expected-searchRadius);
-            const maxSearch=Math.min(inputLength-windowSize,expected+searchRadius);
-            const referenceChannel=inputChannels[0];
-            const compareLength=Math.min(overlap,inputLength-previousInputPosition-overlap,inputLength-bestPosition-overlap);
-            for(let candidate=minSearch;candidate<=maxSearch;candidate+=4){
-                let score=0;
-                const length=Math.min(overlap,inputLength-previousInputPosition-overlap,inputLength-candidate-overlap);
-                if(length<=16)continue;
-                for(let j=0;j<length;j+=4){
-                    const a=referenceChannel[previousInputPosition+j];
-                    const b=referenceChannel[candidate+j];
-                    score+=a*b;
+    /*
+     * WSOLA parameters.
+     *
+     * A shorter analysis window keeps transients clearer,
+     * while the overlap gives the algorithm enough material
+     * to find a phase-aligned waveform match.
+     */
+    const frameSize = Math.max(
+        1024,
+        Math.round(sampleRate * 0.035)
+    ) + (Math.max(1024, Math.round(sampleRate * 0.035)) % 2);
+
+    const overlap = Math.floor(frameSize / 2);
+    const synthesisHop = overlap;
+    const analysisHop = overlap * speed;
+
+    const finalLength = Math.max(
+        1,
+        Math.round(inputLength / speed)
+    );
+
+    /*
+     * The last frame needs enough room to cover the requested
+     * output length. A little input padding avoids a hard cut.
+     */
+    const frameCount = Math.max(
+        1,
+        Math.ceil(
+            Math.max(0, finalLength - frameSize) /
+            synthesisHop
+        ) + 1
+    );
+
+    const outputLength =
+        finalLength + frameSize;
+
+    const outputChannels = [];
+    const weight = new Float32Array(outputLength);
+
+    for (let channel = 0; channel < channels; channel++) {
+        outputChannels.push(
+            new Float32Array(outputLength)
+        );
+    }
+
+    const inputChannels = [];
+    for (let channel = 0; channel < channels; channel++) {
+        inputChannels.push(
+            inputBuffer.getChannelData(channel)
+        );
+    }
+
+    /*
+     * Use the first channel as the alignment reference.
+     * The selected source positions are shared by all channels,
+     * which keeps stereo imaging intact.
+     */
+    const reference = inputChannels[0];
+
+    /*
+     * Raised-cosine window.
+     */
+    const window = new Float32Array(frameSize);
+
+    for (let i = 0; i < frameSize; i++) {
+        window[i] =
+            0.5 -
+            0.5 * Math.cos(
+                (2 * Math.PI * i) /
+                (frameSize - 1)
+            );
+    }
+
+    /*
+     * Search around the expected analysis position.
+     * A larger search helps periodic material such as guitars,
+     * while the distance penalty prevents random jumps.
+     */
+    const searchRadius = Math.round(
+        sampleRate * 0.012
+    );
+
+    const searchStep = 2;
+    const correlationStep = 8;
+
+    let previousPosition = 0;
+
+    for (let frame = 0; frame < frameCount; frame++) {
+        if (token !== processingToken) {
+            return null;
+        }
+
+        const outputPosition =
+            frame * synthesisHop;
+
+        const expectedPosition =
+            frame * analysisHop;
+
+        let bestPosition;
+
+        if (frame === 0) {
+            bestPosition = 0;
+        } else {
+            const maxSourcePosition = Math.max(
+                0,
+                inputLength - frameSize
+            );
+
+            const minimumPosition = Math.min(
+                maxSourcePosition,
+                previousPosition + 1
+            );
+
+            const minimumSearch = Math.max(
+                minimumPosition,
+                Math.floor(expectedPosition - searchRadius)
+            );
+
+            const maximumSearch = Math.min(
+                maxSourcePosition,
+                Math.ceil(expectedPosition + searchRadius)
+            );
+
+            /*
+             * Compare the TAIL of the previous source frame
+             * against the HEAD of the candidate frame.
+             *
+             * This is the important WSOLA alignment step.
+             */
+            const previousTailStart =
+                previousPosition + synthesisHop;
+
+            const compareLength = Math.min(
+                overlap,
+                inputLength - previousTailStart,
+                inputLength - minimumPosition
+            );
+
+            let bestScore = -Infinity;
+            bestPosition = Math.round(
+                Math.min(
+                    Math.max(expectedPosition, minimumSearch),
+                    maximumSearch
+                )
+            );
+
+            if (compareLength > 32 && maximumSearch >= minimumSearch) {
+                for (
+                    let candidate = minimumSearch;
+                    candidate <= maximumSearch;
+                    candidate += searchStep
+                ) {
+                    let dot = 0;
+                    let energyA = 0;
+                    let energyB = 0;
+
+                    for (
+                        let j = 0;
+                        j < compareLength;
+                        j += correlationStep
+                    ) {
+                        const a = reference[
+                            previousTailStart + j
+                        ];
+
+                        const b = reference[
+                            candidate + j
+                        ];
+
+                        dot += a * b;
+                        energyA += a * a;
+                        energyB += b * b;
+                    }
+
+                    const denominator =
+                        Math.sqrt(
+                            energyA * energyB
+                        ) + 1e-12;
+
+                    const correlation =
+                        dot / denominator;
+
+                    /*
+                     * Prefer candidates close to the expected
+                     * position when correlation is nearly equal.
+                     */
+                    const distance =
+                        Math.abs(
+                            candidate - expectedPosition
+                        ) /
+                        Math.max(1, searchRadius);
+
+                    const score =
+                        correlation -
+                        distance * 0.015;
+
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestPosition = candidate;
+                    }
                 }
-                if(score>bestScore){bestScore=score;bestPosition=candidate}
             }
         }
-        previousInputPosition=bestPosition;
-        for(let i=0;i<windowSize;i++){
-            const sourceIndex=bestPosition+i;
-            const destinationIndex=outputPosition+i;
-            if(sourceIndex>=inputLength||destinationIndex>=outputLength)break;
-            const windowValue=window[i];
-            weight[destinationIndex]+=windowValue;
-            for(let channel=0;channel<channels;channel++)outputChannels[channel][destinationIndex]+=inputChannels[channel][sourceIndex]*windowValue;
+
+        bestPosition = Math.max(
+            0,
+            Math.min(
+                Math.max(0, inputLength - 1),
+                Math.round(bestPosition)
+            )
+        );
+
+        previousPosition = bestPosition;
+
+        /*
+         * Overlap-add the selected frame.
+         */
+        for (let i = 0; i < frameSize; i++) {
+            const sourceIndex = bestPosition + i;
+            const destinationIndex = outputPosition + i;
+
+            if (destinationIndex >= outputLength) {
+                break;
+            }
+
+            let sampleWindow = window[i];
+
+            if (sourceIndex >= inputLength) {
+                sampleWindow = 0;
+            }
+
+            weight[destinationIndex] += sampleWindow;
+
+            if (sampleWindow === 0) {
+                continue;
+            }
+
+            for (let channel = 0; channel < channels; channel++) {
+                outputChannels[channel][destinationIndex] +=
+                    inputChannels[channel][sourceIndex] *
+                    sampleWindow;
+            }
         }
-        inputPosition=bestPosition+analysisHop;
-        outputPosition+=synthesisHop;
-        if(onProgress&&outputPosition%16384<synthesisHop)onProgress(Math.min(1,inputPosition/inputLength));
+
+        if (
+            onProgress &&
+            (frame % 8 === 0 || frame === frameCount - 1)
+        ) {
+            onProgress(
+                (frame + 1) / frameCount
+            );
+        }
     }
 
-    for(let i=0;i<outputLength;i++){
-        const normalization=weight[i];
-        if(normalization>0.00001){
-            const inverse=1/normalization;
-            for(let channel=0;channel<channels;channel++)outputChannels[channel][i]*=inverse;
-        }else{
-            for(let channel=0;channel<channels;channel++)outputChannels[channel][i]=0;
+    /*
+     * Normalize overlap-add gain.
+     */
+    for (let i = 0; i < finalLength; i++) {
+        const gain = weight[i];
+
+        if (gain > 1e-6) {
+            const inverseGain = 1 / gain;
+
+            for (let channel = 0; channel < channels; channel++) {
+                outputChannels[channel][i] *= inverseGain;
+            }
         }
     }
-    const finalLength=Math.min(Math.ceil(inputLength/speed),outputLength);
-    const result=new AudioBuffer({length:finalLength,numberOfChannels:channels,sampleRate});
-    for(let channel=0;channel<channels;channel++)result.getChannelData(channel).set(outputChannels[channel].subarray(0,finalLength));
-    if(onProgress)onProgress(1);
+
+    /*
+     * Short fade at the very end prevents a discontinuity if the
+     * final frame had to be clamped to the end of the source.
+     */
+    const fadeSamples = Math.min(
+        Math.round(sampleRate * 0.005),
+        Math.floor(finalLength / 2)
+    );
+
+    for (let i = 0; i < fadeSamples; i++) {
+        const index = finalLength - fadeSamples + i;
+        const gain = 1 - i / fadeSamples;
+
+        for (let channel = 0; channel < channels; channel++) {
+            outputChannels[channel][index] *= gain;
+        }
+    }
+
+    const result = new AudioBuffer({
+        length: finalLength,
+        numberOfChannels: channels,
+        sampleRate
+    });
+
+    for (let channel = 0; channel < channels; channel++) {
+        result.getChannelData(channel).set(
+            outputChannels[channel].subarray(
+                0,
+                finalLength
+            )
+        );
+    }
+
+    if (onProgress) {
+        onProgress(1);
+    }
+
     return result;
 }
 
 async function processAudio(){
     if(!originalBuffer||isProcessing)return null;
+
+    const speed=parseFloat(speedSlider.value);
+
+    if(processedBuffer&&processedSpeed===speed){
+        return processedBuffer;
+    }
+
     isProcessing=true;
     processingToken++;
     const token=processingToken;
-    const speed=parseFloat(speedSlider.value);
     progress.style.display="block";
     progressBar.style.width="0%";
+
     try{
         await new Promise(resolve=>setTimeout(resolve,20));
-        const result=timeStretch(originalBuffer,speed,value=>{progressBar.style.width=`${value*100}%`},token);
+
+        const result=timeStretch(
+            originalBuffer,
+            speed,
+            value=>{
+                progressBar.style.width=`${value*100}%`;
+            },
+            token
+        );
+
         if(token!==processingToken)return null;
+
         processedBuffer=result;
+        processedSpeed=speed;
+
         return result;
     }finally{
         isProcessing=false;
-        setTimeout(()=>{progress.style.display="none"},300);
+        setTimeout(()=>{
+            progress.style.display="none";
+        },300);
     }
 }
 
@@ -225,21 +499,75 @@ stopButton.addEventListener("click",()=>{stopPlayback();showStatus("Playback sto
 function bufferToWav(buffer){
     const channels=buffer.numberOfChannels;
     const sampleRate=buffer.sampleRate;
-    const bytesPerSample=2;
+    const bytesPerSample=3;
     const blockAlign=channels*bytesPerSample;
     const dataLength=buffer.length*blockAlign;
     const arrayBuffer=new ArrayBuffer(44+dataLength);
     const view=new DataView(arrayBuffer);
-    function writeString(offset,string){for(let i=0;i<string.length;i++)view.setUint8(offset+i,string.charCodeAt(i))}
-    writeString(0,"RIFF");view.setUint32(4,36+dataLength,true);writeString(8,"WAVE");writeString(12,"fmt ");view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,channels,true);view.setUint32(24,sampleRate,true);view.setUint32(28,sampleRate*blockAlign,true);view.setUint16(32,blockAlign,true);view.setUint16(34,16,true);writeString(36,"data");view.setUint32(40,dataLength,true);
-    const channelData=[];for(let channel=0;channel<channels;channel++)channelData.push(buffer.getChannelData(channel));
-    let offset=44;
-    for(let i=0;i<buffer.length;i++)for(let channel=0;channel<channels;channel++){
-        let sample=Math.max(-1,Math.min(1,channelData[channel][i]));
-        const pcm=sample<0?Math.round(sample*0x8000):Math.round(sample*0x7FFF);
-        view.setInt16(offset,pcm,true);offset+=2;
+
+    function writeString(offset,string){
+        for(let i=0;i<string.length;i++){
+            view.setUint8(offset+i,string.charCodeAt(i));
+        }
     }
-    return new Blob([arrayBuffer],{type:"audio/wav"});
+
+    writeString(0,"RIFF");
+    view.setUint32(4,36+dataLength,true);
+    writeString(8,"WAVE");
+
+    writeString(12,"fmt ");
+    view.setUint32(16,16,true);
+    view.setUint16(20,1,true);
+    view.setUint16(22,channels,true);
+    view.setUint32(24,sampleRate,true);
+    view.setUint32(28,sampleRate*blockAlign,true);
+    view.setUint16(32,blockAlign,true);
+    view.setUint16(34,24,true);
+
+    writeString(36,"data");
+    view.setUint32(40,dataLength,true);
+
+    const channelData=[];
+
+    for(let channel=0;channel<channels;channel++){
+        channelData.push(
+            buffer.getChannelData(channel)
+        );
+    }
+
+    let offset=44;
+
+    for(let i=0;i<buffer.length;i++){
+        for(let channel=0;channel<channels;channel++){
+            let sample=channelData[channel][i];
+
+            sample=Math.max(-1,Math.min(1,sample));
+
+            const value=Math.round(sample*8388607);
+
+            view.setUint8(
+                offset,
+                value&0xFF
+            );
+
+            view.setUint8(
+                offset+1,
+                (value>>8)&0xFF
+            );
+
+            view.setUint8(
+                offset+2,
+                (value>>16)&0xFF
+            );
+
+            offset+=3;
+        }
+    }
+
+    return new Blob(
+        [arrayBuffer],
+        {type:"audio/wav"}
+    );
 }
 
 exportButton.addEventListener("click",async()=>{
@@ -253,7 +581,7 @@ exportButton.addEventListener("click",async()=>{
         const wav=bufferToWav(buffer);
         const url=URL.createObjectURL(wav);
         const link=document.createElement("a");
-        link.href=url;link.download="audio_speed_shifted.wav";document.body.appendChild(link);link.click();link.remove();
+        link.href=url;link.download=`audio_speed_shifted_${Math.round(parseFloat(speedSlider.value)*100)}percent.wav`;document.body.appendChild(link);link.click();link.remove();
         setTimeout(()=>URL.revokeObjectURL(url),1000);
         showStatus("WAV export completed successfully.","success");
     }catch(error){console.error(error);showStatus("Export failed: "+error.message,"error")}
