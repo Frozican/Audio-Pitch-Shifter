@@ -125,7 +125,7 @@ http://localhost:8000
 
 The live version is available at:
 
-https://frozican.github.io/Audio-Pitch-Shifter/
+https://frozican.github.io/Audio-Speed-Shifter/
 
 ## Limitations
 
